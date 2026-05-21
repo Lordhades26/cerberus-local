@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from cerberus import __version__
@@ -67,7 +67,7 @@ async def _run_loop(cfg: CerberusConfig) -> int:
 
     stop_event = asyncio.Event()
 
-    def _on_signal(*_a):
+    def _on_signal(*_a: object) -> None:
         stop_event.set()
 
     loop = asyncio.get_running_loop()
@@ -92,7 +92,7 @@ async def _run_loop(cfg: CerberusConfig) -> int:
                 pass
         await bus.stop()
         if collected:
-            writer.write(collected, when=datetime.now(timezone.utc))
+            writer.write(collected, when=datetime.now(UTC))
         store.close()
     return 0
 
@@ -102,7 +102,7 @@ async def _report_loop(writer: MarkdownReportWriter, buffer: list[Event], interv
         await asyncio.sleep(interval)
         snapshot = list(buffer)
         buffer.clear()
-        writer.write(snapshot, when=datetime.now(timezone.utc))
+        writer.write(snapshot, when=datetime.now(UTC))
 
 
 def cmd_stop(cfg: CerberusConfig) -> int:

@@ -21,7 +21,7 @@ class _FakeProc:
         }
 
 
-async def _collect_events(bus: EventBus, target_count: int, timeout: float = 2.0) -> list[Event]:
+async def _collect_events(bus: EventBus, target_count: int, wait_secs: float = 2.0) -> list[Event]:
     received: list[Event] = []
     done = asyncio.Event()
 
@@ -33,8 +33,8 @@ async def _collect_events(bus: EventBus, target_count: int, timeout: float = 2.0
     bus.subscribe(handler)
     bus.start()
     try:
-        await asyncio.wait_for(done.wait(), timeout=timeout)
-    except asyncio.TimeoutError:
+        await asyncio.wait_for(done.wait(), timeout=wait_secs)
+    except TimeoutError:
         pass
     await bus.stop()
     return received
@@ -55,7 +55,7 @@ async def test_proc_collector_emits_new_process_events():
     collector = ProcCollector(host="H", poll_interval_seconds=0.05)
     with patch("cerberus.collectors.proc.psutil.process_iter", side_effect=fake_iter):
         task = asyncio.create_task(collector.start(bus))
-        received = await _collect_events(bus, target_count=1, timeout=1.0)
+        received = await _collect_events(bus, target_count=1, wait_secs=1.0)
         await collector.stop()
         task.cancel()
 
@@ -80,7 +80,7 @@ async def test_proc_collector_emits_process_exit():
     collector = ProcCollector(host="H", poll_interval_seconds=0.05)
     with patch("cerberus.collectors.proc.psutil.process_iter", side_effect=fake_iter):
         task = asyncio.create_task(collector.start(bus))
-        received = await _collect_events(bus, target_count=1, timeout=1.0)
+        received = await _collect_events(bus, target_count=1, wait_secs=1.0)
         await collector.stop()
         task.cancel()
 

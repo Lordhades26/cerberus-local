@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import UTC
+
 from cerberus.core.event import Event, Severity
 
 
@@ -15,7 +16,7 @@ def test_event_creates_with_required_fields():
     assert ev.source == "proc"
     assert ev.type == "new_process"
     assert isinstance(ev.id, str) and len(ev.id) == 36  # uuid4
-    assert ev.timestamp.tzinfo == timezone.utc
+    assert ev.timestamp.tzinfo == UTC
 
 
 def test_event_id_unique():
@@ -25,7 +26,10 @@ def test_event_id_unique():
 
 
 def test_event_to_dict_roundtrip():
-    ev = Event(source="proc", type="new_process", host="h", pid=1, user=None, raw={"k": "v"}, indicators={})
+    ev = Event(
+        source="proc", type="new_process", host="h", pid=1,
+        user=None, raw={"k": "v"}, indicators={},
+    )
     d = ev.to_dict()
     assert d["source"] == "proc"
     assert d["raw"] == {"k": "v"}
