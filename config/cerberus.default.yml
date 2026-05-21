@@ -1,0 +1,18 @@
+# Cerberus M1 default config
+mode: dry_run                       # dry_run | monitor (auto_* vienen en M3)
+host_name: null                     # null = autodetect
+
+paths:
+  data_dir: "C:\\ProgramData\\Cerberus"
+  events_db: "C:\\ProgramData\\Cerberus\\db\\events.db"
+  reports_dir: "C:\\Users\\Public\\cerberus_reports"
+  log_file: "C:\\ProgramData\\Cerberus\\logs\\cerberus.log"
+
+collectors:
+  proc:
+    enabled: true
+    poll_interval_seconds: 1.0
+
+reporting:
+  interval_seconds: 300              # 5 minutos
+  retention_days: 7
