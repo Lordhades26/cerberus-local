@@ -1,0 +1,44 @@
+[project]
+name = "cerberus-local"
+version = "0.1.0"
+description = "EDR híbrido Windows con IA local (fork defensivo de HADES-LOCAL)"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "Fabián Hormazábal", email = "combatelamejor@gmail.com"}]
+dependencies = [
+    "psutil>=5.9.8",
+    "pyyaml>=6.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+cerberus = "cerberus_local:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --cov=cerberus --cov-report=term-missing --cov-fail-under=85"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
