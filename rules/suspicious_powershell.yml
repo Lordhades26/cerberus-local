@@ -1,0 +1,9 @@
+id: suspicious_powershell_v1
+severity: HIGH
+category: execution
+condition:
+  mode: any
+  clauses:
+    - source: proc
+      type: new_process
+      cmdline_regex: "(?i)(powershell|pwsh|cmd).*(-enc|-encodedcommand|frombase64string|-nop|-w hidden|downloadstring)"

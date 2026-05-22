@@ -1,0 +1,8 @@
+id: beaconing_suspect_v1
+severity: MEDIUM
+category: c2
+condition:
+  mode: any
+  clauses:
+    - source: net
+      type: beaconing_suspect
