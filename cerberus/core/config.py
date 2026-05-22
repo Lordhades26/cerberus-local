@@ -3,12 +3,18 @@ from __future__ import annotations
 import socket
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 
 Mode = Literal["dry_run", "monitor"]
 _VALID_MODES = {"dry_run", "monitor"}
+
+_DEFAULT_EVT_CHANNELS = [
+    "Security",
+    "Microsoft-Windows-Sysmon/Operational",
+    "Microsoft-Windows-PowerShell/Operational",
+]
 
 
 @dataclass(frozen=True)
@@ -18,14 +24,47 @@ class ProcCollectorConfig:
 
 
 @dataclass(frozen=True)
+class NetCollectorConfig:
+    enabled: bool
+    poll_interval_seconds: float
+    beaconing_window_seconds: int
+    beaconing_min_connections: int
+
+
+@dataclass(frozen=True)
+class FsCollectorConfig:
+    enabled: bool
+    watch_paths: list[Path]
+    mass_rename_threshold: int
+    mass_rename_window_seconds: int
+    high_entropy_threshold: float
+
+
+@dataclass(frozen=True)
+class EvtCollectorConfig:
+    enabled: bool
+    channels: list[str]
+
+
+@dataclass(frozen=True)
 class CollectorsConfig:
     proc: ProcCollectorConfig
+    net: NetCollectorConfig
+    fs: FsCollectorConfig
+    evt: EvtCollectorConfig
+
+
+@dataclass(frozen=True)
+class CorrelatorConfig:
+    window_seconds: int
+    min_sources_for_finding: int
 
 
 @dataclass(frozen=True)
 class PathsConfig:
     data_dir: Path
     events_db: Path
+    findings_db: Path
     reports_dir: Path
     log_file: Path
 
@@ -42,7 +81,42 @@ class CerberusConfig:
     host_name: str
     paths: PathsConfig
     collectors: CollectorsConfig
+    correlator: CorrelatorConfig
     reporting: ReportingConfig
+
+
+def _proc(raw: dict[str, Any]) -> ProcCollectorConfig:
+    return ProcCollectorConfig(
+        enabled=bool(raw.get("enabled", True)),
+        poll_interval_seconds=float(raw.get("poll_interval_seconds", 1.0)),
+    )
+
+
+def _net(raw: dict[str, Any]) -> NetCollectorConfig:
+    return NetCollectorConfig(
+        enabled=bool(raw.get("enabled", True)),
+        poll_interval_seconds=float(raw.get("poll_interval_seconds", 2.0)),
+        beaconing_window_seconds=int(raw.get("beaconing_window_seconds", 60)),
+        beaconing_min_connections=int(raw.get("beaconing_min_connections", 10)),
+    )
+
+
+def _fs(raw: dict[str, Any]) -> FsCollectorConfig:
+    return FsCollectorConfig(
+        enabled=bool(raw.get("enabled", True)),
+        watch_paths=[Path(p) for p in raw.get("watch_paths", [])],
+        mass_rename_threshold=int(raw.get("mass_rename_threshold", 20)),
+        mass_rename_window_seconds=int(raw.get("mass_rename_window_seconds", 5)),
+        high_entropy_threshold=float(raw.get("high_entropy_threshold", 7.5)),
+    )
+
+
+def _evt(raw: dict[str, Any]) -> EvtCollectorConfig:
+    channels = raw.get("channels") or list(_DEFAULT_EVT_CHANNELS)
+    return EvtCollectorConfig(
+        enabled=bool(raw.get("enabled", True)),
+        channels=list(channels),
+    )
 
 
 def load_config(path: Path | str) -> CerberusConfig:
@@ -51,27 +125,41 @@ def load_config(path: Path | str) -> CerberusConfig:
     if mode not in _VALID_MODES:
         raise ValueError(f"Invalid mode {mode!r}; valid: {sorted(_VALID_MODES)}")
     host = raw.get("host_name") or socket.gethostname()
+
     paths_raw = raw.get("paths", {})
     paths = PathsConfig(
         data_dir=Path(paths_raw.get("data_dir", "")),
         events_db=Path(paths_raw.get("events_db", "")),
+        findings_db=Path(paths_raw.get("findings_db", "")),
         reports_dir=Path(paths_raw.get("reports_dir", "")),
         log_file=Path(paths_raw.get("log_file", "")),
     )
+
     coll_raw = raw.get("collectors", {})
-    proc_raw = coll_raw.get("proc", {})
     collectors = CollectorsConfig(
-        proc=ProcCollectorConfig(
-            enabled=bool(proc_raw.get("enabled", True)),
-            poll_interval_seconds=float(proc_raw.get("poll_interval_seconds", 1.0)),
-        )
+        proc=_proc(coll_raw.get("proc", {})),
+        net=_net(coll_raw.get("net", {})),
+        fs=_fs(coll_raw.get("fs", {})),
+        evt=_evt(coll_raw.get("evt", {})),
     )
+
+    corr_raw = raw.get("correlator", {})
+    correlator = CorrelatorConfig(
+        window_seconds=int(corr_raw.get("window_seconds", 10)),
+        min_sources_for_finding=int(corr_raw.get("min_sources_for_finding", 2)),
+    )
+
     rep_raw = raw.get("reporting", {})
     reporting = ReportingConfig(
         interval_seconds=int(rep_raw.get("interval_seconds", 300)),
         retention_days=int(rep_raw.get("retention_days", 7)),
     )
+
     return CerberusConfig(
-        mode=mode, host_name=host, paths=paths,
-        collectors=collectors, reporting=reporting,
+        mode=mode,
+        host_name=host,
+        paths=paths,
+        collectors=collectors,
+        correlator=correlator,
+        reporting=reporting,
     )

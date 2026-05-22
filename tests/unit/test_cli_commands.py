@@ -16,6 +16,10 @@ from cerberus.cli.commands import (
 from cerberus.core.config import (
     CerberusConfig,
     CollectorsConfig,
+    CorrelatorConfig,
+    EvtCollectorConfig,
+    FsCollectorConfig,
+    NetCollectorConfig,
     PathsConfig,
     ProcCollectorConfig,
     ReportingConfig,
@@ -32,12 +36,24 @@ def _make_cfg(tmp_path: Path) -> CerberusConfig:
         paths=PathsConfig(
             data_dir=tmp_path,
             events_db=tmp_path / "events.db",
+            findings_db=tmp_path / "findings.db",
             reports_dir=tmp_path / "reports",
             log_file=tmp_path / "cerberus.log",
         ),
         collectors=CollectorsConfig(
-            proc=ProcCollectorConfig(enabled=True, poll_interval_seconds=0.05)
+            proc=ProcCollectorConfig(enabled=True, poll_interval_seconds=0.05),
+            net=NetCollectorConfig(
+                enabled=False, poll_interval_seconds=2.0,
+                beaconing_window_seconds=60, beaconing_min_connections=10,
+            ),
+            fs=FsCollectorConfig(
+                enabled=False, watch_paths=[],
+                mass_rename_threshold=20, mass_rename_window_seconds=5,
+                high_entropy_threshold=7.5,
+            ),
+            evt=EvtCollectorConfig(enabled=False, channels=["Security"]),
         ),
+        correlator=CorrelatorConfig(window_seconds=10, min_sources_for_finding=2),
         reporting=ReportingConfig(interval_seconds=300, retention_days=7),
     )
 
