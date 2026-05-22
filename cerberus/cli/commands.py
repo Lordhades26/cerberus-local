@@ -6,12 +6,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from cerberus import __version__
+from cerberus.collectors.base import Collector
+from cerberus.collectors.evt import EvtCollector
+from cerberus.collectors.fs import FsCollector
+from cerberus.collectors.net import NetCollector
 from cerberus.collectors.proc import ProcCollector
 from cerberus.core.config import CerberusConfig, load_config
 from cerberus.core.db import EventStore
 from cerberus.core.event import Event
 from cerberus.core.event_bus import EventBus
+from cerberus.core.finding import Finding
 from cerberus.core.logger import get_logger
+from cerberus.detection.correlator import Correlator
+from cerberus.detection.finding_store import FindingStore
 from cerberus.reporting.markdown import MarkdownReportWriter
 
 _log = get_logger("cerberus.cli")
@@ -25,43 +32,97 @@ def cmd_version() -> int:
 def cmd_status(cfg: CerberusConfig) -> int:
     store = EventStore(cfg.paths.events_db)
     store.init_schema()
-    print(f"Host       : {cfg.host_name}")
-    print(f"Mode       : {cfg.mode}")
-    print(f"Events DB  : {cfg.paths.events_db}")
-    print(f"Eventos    : {store.count()}")
+    fstore = FindingStore(cfg.paths.findings_db)
+    fstore.init_schema()
+    print(f"Host        : {cfg.host_name}")
+    print(f"Mode        : {cfg.mode}")
+    print(f"Events DB   : {cfg.paths.events_db}")
+    print(f"Findings DB : {cfg.paths.findings_db}")
+    print(f"Eventos     : {store.count()}")
+    print(f"Findings    : {fstore.count()}")
+    print("Collectors  : "
+          f"proc={cfg.collectors.proc.enabled} "
+          f"net={cfg.collectors.net.enabled} "
+          f"fs={cfg.collectors.fs.enabled} "
+          f"evt={cfg.collectors.evt.enabled}")
     store.close()
+    fstore.close()
     return 0
 
 
 def cmd_start(cfg: CerberusConfig) -> int:
     if cfg.mode != "dry_run":
-        # M1 sólo soporta dry_run; monitor/auto_* vienen en hitos posteriores
         _log.warning("mode_forced_dry_run", extra={"requested": cfg.mode})
     return asyncio.run(_run_loop(cfg))
+
+
+def _build_collectors(cfg: CerberusConfig) -> list[Collector]:
+    collectors: list[Collector] = []
+    if cfg.collectors.proc.enabled:
+        collectors.append(ProcCollector(
+            host=cfg.host_name,
+            poll_interval_seconds=cfg.collectors.proc.poll_interval_seconds,
+        ))
+    if cfg.collectors.net.enabled:
+        collectors.append(NetCollector(
+            host=cfg.host_name,
+            poll_interval_seconds=cfg.collectors.net.poll_interval_seconds,
+            beaconing_window_seconds=cfg.collectors.net.beaconing_window_seconds,
+            beaconing_min_connections=cfg.collectors.net.beaconing_min_connections,
+        ))
+    if cfg.collectors.fs.enabled:
+        collectors.append(FsCollector(
+            host=cfg.host_name,
+            watch_paths=cfg.collectors.fs.watch_paths,
+            mass_rename_threshold=cfg.collectors.fs.mass_rename_threshold,
+            mass_rename_window_seconds=cfg.collectors.fs.mass_rename_window_seconds,
+            high_entropy_threshold=cfg.collectors.fs.high_entropy_threshold,
+        ))
+    if cfg.collectors.evt.enabled:
+        collectors.append(EvtCollector(
+            host=cfg.host_name,
+            channels=cfg.collectors.evt.channels,
+        ))
+    return collectors
 
 
 async def _run_loop(cfg: CerberusConfig) -> int:
     store = EventStore(cfg.paths.events_db)
     store.init_schema()
+    fstore = FindingStore(cfg.paths.findings_db)
+    fstore.init_schema()
     bus = EventBus()
     writer = MarkdownReportWriter(cfg.paths.reports_dir, host=cfg.host_name)
 
-    collected: list[Event] = []
+    collected_events: list[Event] = []
+    collected_findings: list[Finding] = []
 
-    async def persist_and_buffer(ev: Event) -> None:
+    async def persist_event(ev: Event) -> None:
         store.insert(ev)
-        collected.append(ev)
+        collected_events.append(ev)
 
-    bus.subscribe(persist_and_buffer)
-    bus.start()
+    async def on_finding(f: Finding) -> None:
+        fstore.insert(f)
+        collected_findings.append(f)
 
-    collector = ProcCollector(
-        host=cfg.host_name,
-        poll_interval_seconds=cfg.collectors.proc.poll_interval_seconds,
+    bus.subscribe(persist_event)
+    correlator = Correlator(
+        window_seconds=cfg.correlator.window_seconds,
+        min_sources_for_finding=cfg.correlator.min_sources_for_finding,
+        on_finding=on_finding,
     )
-    collector_task = asyncio.create_task(collector.start(bus), name="proc_collector")
+    correlator.attach(bus)
+    bus.start()
+    correlator_task = asyncio.create_task(correlator.run(), name="correlator")
+
+    collectors = _build_collectors(cfg)
+    collector_tasks = [
+        asyncio.create_task(c.start(bus), name=f"collector_{c.name}")
+        for c in collectors
+    ]
     reporter_task = asyncio.create_task(
-        _report_loop(writer, collected, cfg.reporting.interval_seconds),
+        _report_loop(writer, collected_events, collected_findings,
+                     cfg.reporting.interval_seconds),
         name="reporter",
     )
 
@@ -75,39 +136,53 @@ async def _run_loop(cfg: CerberusConfig) -> int:
         try:
             loop.add_signal_handler(sig, _on_signal)
         except NotImplementedError:
-            # Windows no soporta add_signal_handler para SIGTERM en algunos contextos
             signal.signal(sig, lambda *_: stop_event.set())
 
-    _log.info("cerberus_started", extra={"host": cfg.host_name, "mode": cfg.mode})
+    _log.info("cerberus_started",
+              extra={"host": cfg.host_name, "mode": cfg.mode,
+                     "collectors": [c.name for c in collectors]})
     try:
         await stop_event.wait()
     finally:
-        await collector.stop()
-        collector_task.cancel()
-        reporter_task.cancel()
-        for t in (collector_task, reporter_task):
+        for c in collectors:
+            await c.stop()
+        await correlator.stop()
+        # drenar eventos pendientes y promover findings finales antes de cerrar
+        await bus.drain()
+        await correlator.flush()
+        for t in (*collector_tasks, correlator_task, reporter_task):
+            t.cancel()
+        for t in (*collector_tasks, correlator_task, reporter_task):
             try:
                 await t
             except asyncio.CancelledError:
                 pass
         await bus.stop()
-        if collected:
-            writer.write(collected, when=datetime.now(UTC))
+        if collected_events or collected_findings:
+            writer.write(collected_events, when=datetime.now(UTC),
+                         findings=collected_findings)
         store.close()
+        fstore.close()
     return 0
 
 
-async def _report_loop(writer: MarkdownReportWriter, buffer: list[Event], interval: int) -> None:
+async def _report_loop(
+    writer: MarkdownReportWriter,
+    events: list[Event],
+    findings: list[Finding],
+    interval: int,
+) -> None:
     while True:
         await asyncio.sleep(interval)
-        snapshot = list(buffer)
-        buffer.clear()
-        writer.write(snapshot, when=datetime.now(UTC))
+        ev_snapshot = list(events)
+        fn_snapshot = list(findings)
+        events.clear()
+        findings.clear()
+        writer.write(ev_snapshot, when=datetime.now(UTC), findings=fn_snapshot)
 
 
 def cmd_stop(cfg: CerberusConfig) -> int:
-    # M1 corre en foreground; stop = matar el proceso. Se elaborará IPC en M4.
-    print("M1 corre en foreground. Usa Ctrl+C para detener.")
+    print("M2 corre en foreground. Usa Ctrl+C para detener.")
     return 0
 
 
