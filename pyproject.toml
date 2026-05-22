@@ -52,5 +52,5 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [[tool.mypy.overrides]]
-module = ["watchdog.*", "win32evtlog", "win32evtlogutil", "psutil"]
+module = ["watchdog.*", "win32evtlog", "win32evtlogutil", "win32file", "win32pipe", "psutil"]
 ignore_missing_imports = true
