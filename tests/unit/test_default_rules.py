@@ -8,7 +8,7 @@ _RULES_DIR = Path(__file__).resolve().parents[2] / "rules"
 def test_default_rules_all_load():
     eng = RuleEngine(_RULES_DIR)
     count = eng.load()
-    assert count == 4  # ransomware, powershell, beaconing, brute_force
+    assert count == 5  # ransomware, powershell, beaconing, brute_force, suspicious_dns
 
 
 def test_default_rules_ids_unique():
