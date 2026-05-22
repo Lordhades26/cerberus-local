@@ -11,6 +11,8 @@ paths:
   log_file: "C:\\ProgramData\\Cerberus\\logs\\cerberus.log"
   killswitch_path: "C:\\ProgramData\\Cerberus\\KILLSWITCH"
   quarantine_dir: "C:\\ProgramData\\Cerberus\\Quarantine"
+  state_file: "C:\\ProgramData\\Cerberus\\state.json"
+  manifest_path: "C:\\ProgramData\\Cerberus\\manifest.json"
 
 collectors:
   proc:
@@ -46,6 +48,13 @@ response:
   rate:
     max_actions_per_minute: 10
     max_isolate_per_hour: 1
+
+ipc:
+  enabled: true
+  pipe_name: "\\\\.\\pipe\\cerberus"
+
+integrity:
+  enabled: true
 
 detection:
   rule_engine:

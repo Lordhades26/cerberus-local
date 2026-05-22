@@ -21,6 +21,8 @@ from cerberus.core.config import (
     DetectionConfig,
     EvtCollectorConfig,
     FsCollectorConfig,
+    IntegrityConfig,
+    IpcConfig,
     NetCollectorConfig,
     PathsConfig,
     ProcCollectorConfig,
@@ -47,6 +49,8 @@ def _make_cfg(tmp_path: Path) -> CerberusConfig:
             log_file=tmp_path / "cerberus.log",
             killswitch_path=tmp_path / "KILLSWITCH",
             quarantine_dir=tmp_path / "quarantine",
+            state_file=tmp_path / "state.json",
+            manifest_path=tmp_path / "manifest.json",
         ),
         collectors=CollectorsConfig(
             proc=ProcCollectorConfig(enabled=True, poll_interval_seconds=0.05),
@@ -74,6 +78,8 @@ def _make_cfg(tmp_path: Path) -> CerberusConfig:
             auto_critical_categories=frozenset({"ransomware", "c2", "data_exfil"}),
             rate=RateConfig(max_actions_per_minute=10, max_isolate_per_hour=1),
         ),
+        ipc=IpcConfig(enabled=False, pipe_name=r"\\.\pipe\cerberus_test"),
+        integrity=IntegrityConfig(enabled=False),
         reporting=ReportingConfig(interval_seconds=300, retention_days=7),
     )
 

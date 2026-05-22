@@ -105,6 +105,19 @@ class PathsConfig:
     log_file: Path
     killswitch_path: Path
     quarantine_dir: Path
+    state_file: Path
+    manifest_path: Path
+
+
+@dataclass(frozen=True)
+class IpcConfig:
+    enabled: bool
+    pipe_name: str
+
+
+@dataclass(frozen=True)
+class IntegrityConfig:
+    enabled: bool
 
 
 @dataclass(frozen=True)
@@ -122,6 +135,8 @@ class CerberusConfig:
     correlator: CorrelatorConfig
     detection: DetectionConfig
     response: ResponseConfig
+    ipc: IpcConfig
+    integrity: IntegrityConfig
     reporting: ReportingConfig
 
 
@@ -212,6 +227,8 @@ def load_config(path: Path | str) -> CerberusConfig:
         log_file=Path(paths_raw.get("log_file", "")),
         killswitch_path=Path(paths_raw.get("killswitch_path") or (data_dir / "KILLSWITCH")),
         quarantine_dir=Path(paths_raw.get("quarantine_dir") or (data_dir / "Quarantine")),
+        state_file=Path(paths_raw.get("state_file") or (data_dir / "state.json")),
+        manifest_path=Path(paths_raw.get("manifest_path") or (data_dir / "manifest.json")),
     )
 
     coll_raw = raw.get("collectors", {})
@@ -231,6 +248,14 @@ def load_config(path: Path | str) -> CerberusConfig:
     detection = _detection(raw.get("detection", {}))
     response = _response(raw.get("response", {}))
 
+    ipc_raw = raw.get("ipc", {})
+    ipc = IpcConfig(
+        enabled=bool(ipc_raw.get("enabled", True)),
+        pipe_name=str(ipc_raw.get("pipe_name", r"\\.\pipe\cerberus")),
+    )
+    integrity_raw = raw.get("integrity", {})
+    integrity = IntegrityConfig(enabled=bool(integrity_raw.get("enabled", True)))
+
     rep_raw = raw.get("reporting", {})
     reporting = ReportingConfig(
         interval_seconds=int(rep_raw.get("interval_seconds", 300)),
@@ -245,5 +270,7 @@ def load_config(path: Path | str) -> CerberusConfig:
         correlator=correlator,
         detection=detection,
         response=response,
+        ipc=ipc,
+        integrity=integrity,
         reporting=reporting,
     )
