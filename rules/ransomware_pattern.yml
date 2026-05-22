@@ -1,0 +1,11 @@
+id: ransomware_pattern_v1
+severity: CRITICAL
+category: ransomware
+condition:
+  mode: all
+  clauses:
+    - source: fs
+      type: mass_rename
+      count_indicator: {name: rename_count, min: 20}
+    - source: proc
+      type: new_process

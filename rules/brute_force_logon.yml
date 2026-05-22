@@ -1,0 +1,8 @@
+id: brute_force_logon_v1
+severity: HIGH
+category: credential_access
+condition:
+  mode: any
+  clauses:
+    - source: evt
+      type: logon_failure

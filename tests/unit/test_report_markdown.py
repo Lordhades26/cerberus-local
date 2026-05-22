@@ -74,3 +74,27 @@ def test_write_with_findings(tmp_path: Path):
     content = path.read_text(encoding="utf-8")
     assert "## Findings" in content
     assert "mass_rename" in content
+
+
+def test_render_findings_shows_rule_and_triage():
+    import dataclasses
+
+    from cerberus.core.event import Severity
+    from cerberus.core.finding import Finding
+
+    def _e(source, type_):
+        return Event(source=source, type=type_, host="H", pid=10,
+                     user="u", raw={}, indicators={})
+
+    base = Finding.from_cluster(host="H", pid=10, user="u",
+                                evidence=[_e("fs", "mass_rename"), _e("proc", "new_process")])
+    enriched = dataclasses.replace(
+        base, severity=Severity.CRITICAL, severity_base=Severity.CRITICAL,
+        rule_ids=("ransomware_pattern_v1",),
+        ai_triage={"severity": 4, "family_guess": "lockbit", "confidence": 0.8,
+                   "reasoning": "x", "suggested_actions": []},
+    )
+    out = MarkdownReportWriter.render([], host="H", findings=[enriched])
+    assert "ransomware_pattern_v1" in out
+    assert "lockbit" in out
+    assert "CRITICAL" in out

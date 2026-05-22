@@ -21,6 +21,9 @@ class Finding:
     user: str | None
     evidence: tuple[Event, ...]
     severity: Severity = Severity.MEDIUM
+    severity_base: Severity = Severity.MEDIUM
+    rule_ids: tuple[str, ...] = ()
+    ai_triage: dict[str, Any] | None = None
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -63,6 +66,9 @@ class Finding:
             "pid": self.pid,
             "user": self.user,
             "severity": int(self.severity),
+            "severity_base": int(self.severity_base),
+            "rule_ids": list(self.rule_ids),
+            "ai_triage": self.ai_triage,
             "sources": sorted(self.sources),
             "categories": sorted(self.categories),
             "primary_event_id": self.primary_event_id,

@@ -36,6 +36,17 @@ correlator:
   window_seconds: 10
   min_sources_for_finding: 2
 
+detection:
+  rule_engine:
+    enabled: true
+    rules_dir: "rules"
+  ai_analyst:
+    enabled: true
+    model: "qwen2.5-coder:14b"
+    base_url: null                  # null = autodetect (env -> 127.0.0.1:11434 -> host.docker.internal)
+    timeout_seconds: 20.0
+    max_severity_delta: 1
+
 reporting:
   interval_seconds: 300              # 5 minutos
   retention_days: 7
