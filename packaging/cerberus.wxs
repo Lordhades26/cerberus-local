@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CERBERUS-LOCAL — plantilla WiX (.msi). M6 de campo: regenerar los GUID con uuidgen,
+  ajustar rutas, y construir con packaging/build_msi.ps1 (heat/candle/light + signtool).
+  Los Id="PUT-GUID-HERE" deben reemplazarse por GUID únicos antes de compilar.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*"
+           Name="CERBERUS-LOCAL EDR"
+           Language="1033"
+           Version="0.6.0"
+           Manufacturer="Fabian Hormazabal"
+           UpgradeCode="PUT-GUID-HERE-UPGRADE">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
+             Description="EDR hibrido Windows con IA local (defensivo)" />
+
+    <MajorUpgrade DowngradeErrorMessage="Ya hay una version mas nueva instalada." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Cerberus" />
+      </Directory>
+      <Directory Id="CommonAppDataFolder">
+        <Directory Id="DATAFOLDER" Name="Cerberus" />
+      </Directory>
+    </Directory>
+
+    <!-- El payload real (cerberus/, cerberus_local.py, cerberus_service.py, rules/,
+         policies/, prompts/, config/) se cosecha con heat en build_msi.ps1 y se
+         referencia aqui como ComponentGroupRef Id="HarvestedComponents". -->
+    <Feature Id="MainFeature" Title="CERBERUS-LOCAL" Level="1">
+      <ComponentGroupRef Id="HarvestedComponents" />
+      <ComponentRef Id="ServiceComponent" />
+    </Feature>
+
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="ServiceComponent" Guid="PUT-GUID-HERE-SERVICE">
+        <File Id="ServiceExe" Source="$(var.PythonExe)" KeyPath="yes" />
+        <!-- Instala y arranca el servicio Windows "Cerberus". -->
+        <ServiceInstall Id="CerberusServiceInstall"
+                        Name="Cerberus"
+                        DisplayName="CERBERUS-LOCAL EDR"
+                        Description="EDR hibrido Windows con IA local (defensivo)."
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Arguments="[INSTALLFOLDER]cerberus_service.py" />
+        <ServiceControl Id="CerberusServiceControl"
+                        Name="Cerberus"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Post-install: firmar el arbol con el manifest de integridad. -->
+    <CustomAction Id="IntegritySnapshot"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="&quot;[INSTALLFOLDER]python.exe&quot; cerberus_local.py integrity snapshot"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="IntegritySnapshot" After="InstallServices">NOT Installed</Custom>
+    </InstallExecuteSequence>
+  </Product>
+</Wix>
