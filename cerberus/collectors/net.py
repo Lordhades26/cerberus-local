@@ -61,6 +61,7 @@ class NetCollector(Collector):
             while not self._stop.is_set():
                 try:
                     await self._tick(bus)
+                    self.purge_stale()
                 except Exception as exc:
                     self._last_error = repr(exc)
                     _log.error("net_tick_error", extra={"error": str(exc)})
@@ -136,6 +137,10 @@ class NetCollector(Collector):
         cutoff = now - self._beacon_window
         while hist and hist[0] < cutoff:
             hist.popleft()
+        if not hist:
+            self._beacon_hist.pop(bkey, None)
+            self._beacon_alerted.discard(bkey)
+            return
         if len(hist) >= self._beacon_min and bkey not in self._beacon_alerted:
             self._beacon_alerted.add(bkey)
             ev = Event(
@@ -152,3 +157,18 @@ class NetCollector(Collector):
             )
             await bus.publish(ev)
             self._events_emitted += 1
+
+    def purge_stale(self) -> None:
+        """Elimina claves (pid, ip) cuyo historial beacon ya envejeció por completo."""
+        now = time.monotonic()
+        cutoff = now - self._beacon_window
+        for bkey in list(self._beacon_hist.keys()):
+            hist = self._beacon_hist[bkey]
+            while hist and hist[0] < cutoff:
+                hist.popleft()
+            if not hist:
+                del self._beacon_hist[bkey]
+                self._beacon_alerted.discard(bkey)
+
+    def beacon_key_count(self) -> int:
+        return len(self._beacon_hist)
