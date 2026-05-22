@@ -25,7 +25,7 @@ from cerberus.detection.pipeline import DetectionPipeline
 from cerberus.detection.rule_engine import RuleEngine
 from cerberus.reporting.markdown import MarkdownReportWriter
 from cerberus.response.action_store import ActionStore
-from cerberus.response.actions import ActionReport
+from cerberus.response.actions import Action, ActionReport
 from cerberus.response.engine import ResponseEngine
 from cerberus.response.executor import SystemExecutor
 from cerberus.response.policy_engine import PolicyEngine
@@ -266,6 +266,39 @@ async def _report_loop(
 def cmd_stop(cfg: CerberusConfig) -> int:
     print("M2 corre en foreground. Usa Ctrl+C para detener.")
     return 0
+
+
+def cmd_mode(cfg: CerberusConfig, new_mode: str) -> int:
+    from cerberus.core.config import _VALID_MODES
+    if new_mode not in _VALID_MODES:
+        print(f"Modo inválido: {new_mode}. Válidos: {sorted(_VALID_MODES)}")
+        return 2
+    print(f"Para activar el modo {new_mode}, edita 'mode:' en config/cerberus.default.yml "
+          f"y reinicia el agente. (La persistencia en caliente llega con el Service en M5.)")
+    return 0
+
+
+def cmd_rollback(cfg: CerberusConfig, action_id: str) -> int:
+    astore = ActionStore(cfg.paths.actions_db)
+    astore.init_schema()
+    row = astore.fetch_by_id(action_id)
+    if row is None:
+        print(f"No existe action_id {action_id}")
+        astore.close()
+        return 2
+    if not row["executed"]:
+        print(f"Acción {action_id} no se ejecutó (reason={row['reason']}); nada que revertir.")
+        astore.close()
+        return 0
+    executor = SystemExecutor(quarantine_dir=cfg.paths.quarantine_dir)
+    action = Action(type=row["action_type"], params=row["params"])
+    result = executor.revert(action)
+    astore.insert(result, finding_id=row["finding_id"],
+                  policy_id=f"rollback_of:{action_id}", mode=cfg.mode)
+    print(f"Rollback de {action_id} ({row['action_type']}): "
+          f"success={result.success} reason={result.reason}")
+    astore.close()
+    return 0 if result.success else 1
 
 
 def resolve_config(path: Path | None) -> CerberusConfig:

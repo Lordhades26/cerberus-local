@@ -221,3 +221,36 @@ async def test_run_loop_writes_final_report(tmp_path: Path) -> None:
     # A report may have been written if events were collected before cancel.
     # We don't assert existence since cancellation timing is non-deterministic,
     # but the loop ran without error — that's the coverage goal.
+
+
+def test_cmd_mode_invalid_returns_2(tmp_path: Path) -> None:
+    from cerberus.cli.commands import cmd_mode
+    assert cmd_mode(_make_cfg(tmp_path), "nuke") == 2
+
+
+def test_cmd_mode_valid_returns_0(tmp_path: Path) -> None:
+    from cerberus.cli.commands import cmd_mode
+    assert cmd_mode(_make_cfg(tmp_path), "auto_critical") == 0
+
+
+def test_cmd_rollback_missing_action(tmp_path: Path) -> None:
+    from cerberus.cli.commands import cmd_rollback
+    assert cmd_rollback(_make_cfg(tmp_path), "does-not-exist") == 2
+
+
+def test_cmd_rollback_reverts_executed_action(tmp_path: Path) -> None:
+    from cerberus.cli.commands import cmd_rollback
+    from cerberus.response.action_store import ActionStore
+    from cerberus.response.actions import Action, ActionResult
+    cfg = _make_cfg(tmp_path)
+    astore = ActionStore(cfg.paths.actions_db)
+    astore.init_schema()
+    a = Action(type="block_ip", params={"ip": "9.9.9.9"})
+    r = ActionResult(action=a, executed=True, success=True, output="ok",
+                     command="netsh add", reverted_command="netsh delete", reason="authorized")
+    aid = astore.insert(r, finding_id="F1", policy_id="c2", mode="auto_all")
+    astore.close()
+    with patch("cerberus.response.executor.subprocess.run") as mrun:
+        mrun.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
+        rc = cmd_rollback(cfg, aid)
+    assert rc == 0
