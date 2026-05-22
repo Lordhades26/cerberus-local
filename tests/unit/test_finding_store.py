@@ -68,3 +68,27 @@ def test_purge_older_than_days(store: FindingStore):
     deleted = store.purge_older_than(days=90)
     assert deleted == 1
     assert store.count() == 1
+
+
+def test_store_persists_enrichment_fields(store: FindingStore):
+    import dataclasses
+
+    from cerberus.core.event import Severity as Sev
+    base = _finding()
+    enriched = dataclasses.replace(
+        base, severity=Sev.HIGH, severity_base=Sev.HIGH,
+        rule_ids=("r1", "r2"),
+        ai_triage={"severity": 3, "family_guess": "x", "confidence": 0.5},
+    )
+    store.insert(enriched)
+    row = store.fetch_all()[0]
+    assert row["severity_base"] == int(Sev.HIGH)
+    assert row["rule_ids"] == ["r1", "r2"]
+    assert row["ai_triage"]["family_guess"] == "x"
+
+
+def test_store_ai_triage_nullable(store: FindingStore):
+    store.insert(_finding())  # ai_triage None
+    row = store.fetch_all()[0]
+    assert row["ai_triage"] is None
+    assert row["rule_ids"] == []

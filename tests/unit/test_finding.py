@@ -46,3 +46,32 @@ def test_finding_empty_evidence_raises():
     import pytest
     with pytest.raises(ValueError):
         Finding.from_cluster(host="H", pid=1, user="u", evidence=[])
+
+
+def test_finding_enrichment_fields_default_empty():
+    evs = [_ev("proc", "new_process"), _ev("net", "outbound_conn")]
+    f = Finding.from_cluster(host="H", pid=10, user="u", evidence=evs)
+    assert f.severity_base == Severity.MEDIUM
+    assert f.rule_ids == ()
+    assert f.ai_triage is None
+
+
+def test_finding_enrichment_via_replace_serializes():
+    import dataclasses
+    import json
+
+    from cerberus.core.event import Severity as Sev
+    evs = [_ev("fs", "mass_rename"), _ev("proc", "new_process")]
+    base = Finding.from_cluster(host="H", pid=10, user="u", evidence=evs)
+    enriched = dataclasses.replace(
+        base,
+        severity=Sev.CRITICAL,
+        severity_base=Sev.CRITICAL,
+        rule_ids=("ransomware_pattern_v1",),
+        ai_triage={"severity": 4, "family_guess": "lockbit", "confidence": 0.8},
+    )
+    d = enriched.to_dict()
+    assert d["severity_base"] == int(Sev.CRITICAL)
+    assert d["rule_ids"] == ["ransomware_pattern_v1"]
+    assert d["ai_triage"]["family_guess"] == "lockbit"
+    json.dumps(d)  # serializable

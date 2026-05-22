@@ -16,9 +16,12 @@ CREATE TABLE IF NOT EXISTS findings (
     pid               INTEGER,
     user              TEXT,
     severity          INTEGER NOT NULL,
+    severity_base     INTEGER NOT NULL,
     sources           TEXT NOT NULL,
     categories        TEXT NOT NULL,
     primary_event_id  TEXT NOT NULL,
+    rule_ids          TEXT NOT NULL,
+    ai_triage         TEXT,
     evidence          TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_findings_timestamp ON findings(timestamp);
@@ -49,13 +52,14 @@ class FindingStore:
 
     def insert(self, finding: Finding) -> None:
         d = finding.to_dict()
+        ai_triage = json.dumps(d["ai_triage"]) if d["ai_triage"] is not None else None
         self._conn.execute(
             """
             INSERT INTO findings(
-                id, timestamp, host, pid, user, severity,
-                sources, categories, primary_event_id, evidence
+                id, timestamp, host, pid, user, severity, severity_base,
+                sources, categories, primary_event_id, rule_ids, ai_triage, evidence
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 d["id"],
@@ -64,9 +68,12 @@ class FindingStore:
                 d["pid"],
                 d["user"],
                 d["severity"],
+                d["severity_base"],
                 json.dumps(d["sources"]),
                 json.dumps(d["categories"]),
                 d["primary_event_id"],
+                json.dumps(d["rule_ids"]),
+                ai_triage,
                 json.dumps(d["evidence"]),
             ),
         )
@@ -75,6 +82,8 @@ class FindingStore:
         d = dict(row)
         d["sources"] = json.loads(d["sources"])
         d["categories"] = json.loads(d["categories"])
+        d["rule_ids"] = json.loads(d["rule_ids"])
+        d["ai_triage"] = json.loads(d["ai_triage"]) if d["ai_triage"] is not None else None
         d["evidence"] = json.loads(d["evidence"])
         return d
 
