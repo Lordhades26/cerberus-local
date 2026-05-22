@@ -1,0 +1,6 @@
+id: execution_response
+match:
+  severity_min: HIGH
+  categories: [new_process]
+require_confirmation: true
+actions: [kill_pid]

@@ -1,0 +1,6 @@
+id: isolation_response
+match:
+  severity_min: CRITICAL
+  categories: []
+require_confirmation: true
+actions: [isolate_host]

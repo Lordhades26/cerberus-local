@@ -1,0 +1,6 @@
+id: ransomware_response
+match:
+  severity_min: CRITICAL
+  categories: [mass_rename]
+require_confirmation: false
+actions: [kill_pid, quarantine, block_ip]

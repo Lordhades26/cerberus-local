@@ -1,0 +1,6 @@
+id: c2_response
+match:
+  severity_min: HIGH
+  categories: [beaconing_suspect]
+require_confirmation: false
+actions: [block_ip]
