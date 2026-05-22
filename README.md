@@ -1,56 +1,40 @@
-# CERBERUS-LOCAL — M4 (Respuesta: PolicyEngine + ResponseEngine)
+# CERBERUS-LOCAL — M5 (Núcleo de servicio: IPC + hot-mode + anti-tampering)
 
 EDR híbrido Windows con IA local Ollama. Fork defensivo de HADES-LOCAL.
 
-**Hito actual:** M4 — respuesta automática heurística con guardrails. Tras la
-detección (M3), cada finding pasa por una `PolicyEngine` que decide acciones por
-`(severity, categorías)` y un `ResponseEngine` que aplica gates fail-closed antes
-de ejecutar. **`dry_run` es el default obligatorio**: detecta, decide y registra,
-pero no ejecuta hasta que el operador active un modo `auto_*` explícitamente.
+**Hito actual:** M5 — endurecimiento para operación como servicio. IPC CLI↔Service
+(protocolo JSON sobre transporte abstracto), cambio de **modo en caliente** sin
+reiniciar, **anti-tampering por checksum SHA256**, y purga de estado del NetCollector.
+La integración real de Windows (Service, `.msi`, Npcap, redteam) es **M6 de campo** —
+ver `docs/M6_FIELD_GUIDE.md`.
 
-## Componentes en M4 (sobre M1–M3)
+## Componentes en M5 (sobre M1–M4)
 
-- `PolicyEngine` (YAML) → decide acciones SOLO por `(severity, categorías del finding)` — **nunca** por la IA (G1)
-- `SystemExecutor` → 6 acciones: `kill_pid`, `quarantine`, `block_ip`, `stop_service`, `isolate_host`, `disable_user`; **anti-inyección** (`subprocess` con argv-list, `shell=False`, inputs validados); `build`(puro)/`run`/`revert`
-- `ResponseEngine` → gates fail-closed **killswitch → modo → require_confirmation → rate-limit**; ejecución real solo en `auto_critical`/`auto_all`
-- `RateLimiter` (10 acciones/min, 1 isolate_host/hora), `ActionStore` (`actions_log.db`, audit trail con comando+reversión)
-- CLI `mode <m>` y `rollback <action_id>`; sección "Acciones" en el reporte
+- **IPC** — `IpcDispatcher` (deny-by-default) + `InMemoryTransport` (tests) + `IpcServer`/`IpcClient`; `NamedPipeTransport` (pywin32 lazy, degrada sin pywin32)
+- **Hot-mode** — `RuntimeState` (state.json atómico) + `ResponseEngine.set_mode()`; `cerberus mode <m>` persiste y un agente corriendo lo aplica en caliente (watcher en el loop de reporte)
+- **Anti-tampering** — `IntegrityVerifier` (manifest SHA256); al arrancar, si el manifest no verifica → **fuerza `dry_run`** (fail-safe). Comandos `integrity snapshot` / `integrity verify`
+- **NetCollector hardening** — purga claves beacon obsoletas (cierra el LOW de M2)
+- **`ServiceController`** scaffolding (`ForegroundServiceController`; el Windows Service real es M6)
 
-100% heurístico — **0 LLM nuevo**. El `ai_triage` de M3 es complementario y no causa ejecución.
+100% heurístico — 0 LLM nuevo. Cambiar a `auto_*` sigue pasando por los gates del ResponseEngine (killswitch/confirmation/rate-limit; G3 intacto).
 
-## Modos de operación
+## Comandos nuevos
 
-| Modo | Comportamiento |
-|------|----------------|
-| `dry_run` | **Default obligatorio.** Detecta + decide + registra; NO ejecuta. |
-| `monitor` | Igual que dry_run (sugiere, no ejecuta). |
-| `auto_critical` | Ejecuta solo si `severity=CRITICAL` y categoría ∈ `{ransomware, c2, data_exfil}`. |
-| `auto_all` | Ejecuta para `HIGH`+`CRITICAL`. |
-
-Cambiar el modo: editar `mode:` en `config/cerberus.default.yml` y reiniciar
-(persistencia en caliente llega con el Service en M5). `python cerberus_local.py mode <m>` valida el valor.
-
-## Parada de emergencia (killswitch)
-
-Crear el archivo `C:\ProgramData\Cerberus\KILLSWITCH` **detiene toda ejecución de
-acciones** (fuerza dry_run), sin importar el modo. Es el override supremo.
-
-## Rollback
-
-Cada acción (ejecutada o simulada) queda en `actions_log.db` con su comando y su
-reversión. Para revertir una acción ejecutada:
 ```powershell
-python cerberus_local.py rollback <action_id>
+python cerberus_local.py mode auto_critical   # persiste el modo (hot-switch sin reiniciar)
+python cerberus_local.py integrity snapshot   # firma el árbol (manifest.json)
+python cerberus_local.py integrity verify     # verifica integridad (rc=1 si hay violación)
+python cerberus_local.py rollback <action_id> # revierte una acción ejecutada (M4)
 ```
-(`kill_pid` no es revertible; `quarantine` requiere restauración manual.)
 
-## Guardrails verificados por tests
+## Estado del proyecto (cabezas completas)
 
-- **G1** la IA no decide acciones (solo `PolicyEngine`, por `severity`+`categorías`)
-- **G3** la IA no bypassa dry_run/killswitch/rate-limits/confirmation (gates fail-closed)
-- **G7** trazabilidad: cada acción en `actions_log.db` referencia `finding_id` + `policy_id`
-- **A05** ejecución solo vía `argv` validado con `shell=False` (sin inyección de comandos)
-- `isolate_host` y `disable_user` requieren `require_confirmation` (no auto por blast-radius)
+- **M1+M2** — Telemetría: 4 collectors (proc/net/fs/evt) + EventBus + Correlator + SQLite + reporte
+- **M3** — Detección: RuleEngine + AIAnalyst (Ollama, consultivo, guardrails) + DetectionPipeline
+- **M4** — Respuesta: PolicyEngine + ResponseEngine + 6 acciones + rollback (dry_run default)
+- **M5** — Servicio: IPC + hot-mode + anti-tampering + hardening
+
+Tests: **181 verdes, cobertura 89.6%, ruff y mypy (strict) limpios.**
 
 ## Quickstart
 
@@ -58,11 +42,11 @@ python cerberus_local.py rollback <action_id>
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e ".[dev]"
-pip install -e ".[windows]"      # opcional, EvtCollector real en Windows
+pip install -e ".[windows]"      # opcional, EvtCollector + named pipe reales en Windows
 
-python cerberus_local.py version  # cerberus-local 0.4.0
-python cerberus_local.py status   # conteos eventos/findings/acciones + collectors
-python cerberus_local.py start    # foreground, Ctrl+C para detener (dry_run por defecto)
+python cerberus_local.py version  # cerberus-local 0.5.0
+python cerberus_local.py status
+python cerberus_local.py start    # foreground, Ctrl+C (dry_run por defecto)
 ```
 
 ## Tests
@@ -73,19 +57,15 @@ python cerberus_local.py start    # foreground, Ctrl+C para detener (dry_run por
 .venv\Scripts\python -m mypy cerberus cerberus_local.py
 ```
 
-Estado actual: **152 tests verdes, cobertura 91.17%, ruff y mypy (strict) limpios.**
+## Próximo (M6 — campo, manual en Windows real)
 
-## Próximo hito
-
-- **M5** — Windows Service, named pipe IPC, `.msi`, anti-tampering, redteam tests, pyshark/`dns_query`, hardening del LOW de NetCollector, persistencia en caliente de `mode`.
-
-Ver `docs/superpowers/specs/2026-05-21-cerberus-local-edr-design.md` y `docs/superpowers/plans/`.
+`.msi` WiX · Windows Service real (`win32serviceutil`) · named pipe con ACL SYSTEM ·
+Npcap + pyshark/`dns_query` · redteam en VM · ACLs/TakeOwnership de cuarentena.
+Ver **`docs/M6_FIELD_GUIDE.md`** y `docs/superpowers/specs/2026-05-21-cerberus-local-edr-design.md`.
 
 ## Aviso legal
 
-CERBERUS-LOCAL es software defensivo; solo en hosts propios o con autorización
-escrita del propietario. **La respuesta automática (kill/firewall/quarantine/
-isolate/disable_user) puede causar interrupciones operativas graves**, incluido el
-aislamiento de red o el bloqueo de cuentas. El modo `dry_run` es obligatorio en
-primer arranque; **no actives `auto_*` fuera de una VM aislada hasta validar las
-policies en tu entorno**. El autor no se responsabiliza por uso indebido.
+CERBERUS-LOCAL es software defensivo; solo en hosts propios o con autorización escrita.
+La respuesta automática puede causar interrupciones graves; el modo `dry_run` es obligatorio
+en primer arranque. El IPC y el cambio de modo no permiten saltarse el killswitch ni los
+límites de tasa. No habilites `auto_*` fuera de una VM aislada hasta validar en tu entorno.
