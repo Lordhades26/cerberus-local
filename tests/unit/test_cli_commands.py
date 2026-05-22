@@ -260,3 +260,24 @@ def test_cmd_rollback_reverts_executed_action(tmp_path: Path) -> None:
         mrun.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
         rc = cmd_rollback(cfg, aid)
     assert rc == 0
+
+
+def test_cmd_mode_persists_to_state(tmp_path: Path) -> None:
+    from cerberus.cli.commands import cmd_mode
+    from cerberus.core.runtime_state import RuntimeState
+    cfg = _make_cfg(tmp_path)
+    assert cmd_mode(cfg, "auto_all") == 0
+    assert RuntimeState(cfg.paths.state_file).get_mode(default="dry_run") == "auto_all"
+
+
+def test_cmd_integrity_snapshot_then_verify(tmp_path: Path) -> None:
+    from cerberus.cli.commands import cmd_integrity
+    cfg = _make_cfg(tmp_path)
+    assert cmd_integrity(cfg, "snapshot") == 0
+    assert cfg.paths.manifest_path.exists()
+    assert cmd_integrity(cfg, "verify") == 0
+
+
+def test_cmd_integrity_verify_without_manifest(tmp_path: Path) -> None:
+    from cerberus.cli.commands import cmd_integrity
+    assert cmd_integrity(_make_cfg(tmp_path), "verify") == 2

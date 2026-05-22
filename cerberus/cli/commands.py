@@ -18,6 +18,7 @@ from cerberus.core.event import Event
 from cerberus.core.event_bus import EventBus
 from cerberus.core.finding import Finding
 from cerberus.core.logger import get_logger
+from cerberus.core.runtime_state import RuntimeState
 from cerberus.detection.ai_analyst import AIAnalyst
 from cerberus.detection.correlator import Correlator
 from cerberus.detection.finding_store import FindingStore
@@ -30,6 +31,9 @@ from cerberus.response.engine import ResponseEngine
 from cerberus.response.executor import SystemExecutor
 from cerberus.response.policy_engine import PolicyEngine
 from cerberus.response.rate_limiter import RateLimiter
+from cerberus.service.integrity import IntegrityVerifier
+from cerberus.service.ipc import IpcDispatcher, IpcServer
+from cerberus.service.named_pipe import NamedPipeTransport
 
 _log = get_logger("cerberus.cli")
 
@@ -152,6 +156,21 @@ def _build_response_engine(cfg: CerberusConfig, action_store: ActionStore) -> Re
     )
 
 
+def _startup_integrity_violation(cfg: CerberusConfig) -> bool:
+    """Verifica integridad al arrancar (I/O bloqueante, sync). True si hay violación."""
+    if not (cfg.integrity.enabled and cfg.paths.manifest_path.exists()):
+        return False
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    verifier = IntegrityVerifier()
+    res = verifier.verify(repo_root, verifier.load_manifest(cfg.paths.manifest_path))
+    if not res.ok:
+        _log.critical("integrity_violation",
+                      extra={"mismatched": res.mismatched, "missing": res.missing,
+                             "extra": res.extra})
+        return True
+    return False
+
+
 async def _run_loop(cfg: CerberusConfig) -> int:
     store = EventStore(cfg.paths.events_db)
     store.init_schema()
@@ -173,6 +192,14 @@ async def _run_loop(cfg: CerberusConfig) -> int:
     pipeline = _build_pipeline(cfg)
     response_engine = _build_response_engine(cfg, astore)
 
+    # Hot-mode: aplicar el modo persistido (RuntimeState) y verificar integridad.
+    runtime_state = RuntimeState(cfg.paths.state_file)
+    effective_mode = runtime_state.get_mode(default=cfg.mode)
+    if response_engine is not None:
+        response_engine.set_mode(effective_mode)
+        if _startup_integrity_violation(cfg):
+            response_engine.set_mode("dry_run")
+
     async def on_finding(f: Finding) -> None:
         enriched = await pipeline.process(f)
         fstore.insert(enriched)
@@ -191,6 +218,19 @@ async def _run_loop(cfg: CerberusConfig) -> int:
     bus.start()
     correlator_task = asyncio.create_task(correlator.run(), name="correlator")
 
+    # IPC server (named pipe; degrada con gracia sin pywin32).
+    ipc_server: IpcServer | None = None
+    if cfg.ipc.enabled:
+        transport = NamedPipeTransport(pipe_name=cfg.ipc.pipe_name)
+        dispatcher = IpcDispatcher()
+        dispatcher.register("status", lambda a: {
+            "events": store.count(), "findings": fstore.count(),
+            "mode": response_engine.mode if response_engine else cfg.mode})
+        dispatcher.register("mode", lambda a: _ipc_set_mode(
+            runtime_state, response_engine, str(a.get("mode", ""))))
+        ipc_server = IpcServer(transport, dispatcher)
+        ipc_server.start()
+
     collectors = _build_collectors(cfg)
     collector_tasks = [
         asyncio.create_task(c.start(bus), name=f"collector_{c.name}")
@@ -198,7 +238,8 @@ async def _run_loop(cfg: CerberusConfig) -> int:
     ]
     reporter_task = asyncio.create_task(
         _report_loop(writer, collected_events, collected_findings,
-                     collected_action_reports, cfg.reporting.interval_seconds),
+                     collected_action_reports, cfg.reporting.interval_seconds,
+                     runtime_state, response_engine, cfg.mode),
         name="reporter",
     )
 
@@ -234,6 +275,8 @@ async def _run_loop(cfg: CerberusConfig) -> int:
             except asyncio.CancelledError:
                 pass
         await bus.stop()
+        if ipc_server is not None:
+            ipc_server.stop()
         if collected_events or collected_findings or collected_action_reports:
             writer.write(collected_events, when=datetime.now(UTC),
                          findings=collected_findings,
@@ -250,9 +293,16 @@ async def _report_loop(
     findings: list[Finding],
     action_reports: list[ActionReport],
     interval: int,
+    runtime_state: RuntimeState,
+    response_engine: ResponseEngine | None,
+    default_mode: str,
 ) -> None:
     while True:
         await asyncio.sleep(interval)
+        # hot-mode: aplicar el modo persistido si cambió
+        persisted = runtime_state.get_mode(default=default_mode)
+        if response_engine is not None and persisted != response_engine.mode:
+            response_engine.set_mode(persisted)
         ev_snapshot = list(events)
         fn_snapshot = list(findings)
         ar_snapshot = list(action_reports)
@@ -273,9 +323,44 @@ def cmd_mode(cfg: CerberusConfig, new_mode: str) -> int:
     if new_mode not in _VALID_MODES:
         print(f"Modo inválido: {new_mode}. Válidos: {sorted(_VALID_MODES)}")
         return 2
-    print(f"Para activar el modo {new_mode}, edita 'mode:' en config/cerberus.default.yml "
-          f"y reinicia el agente. (La persistencia en caliente llega con el Service en M5.)")
+    RuntimeState(cfg.paths.state_file).set_mode(new_mode)
+    print(f"Modo persistido: {new_mode}. Un agente en ejecución lo aplicará en caliente.")
     return 0
+
+
+def cmd_integrity(cfg: CerberusConfig, action: str) -> int:
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    v = IntegrityVerifier()
+    if action == "snapshot":
+        manifest = v.build_manifest(repo_root)
+        v.write_manifest(cfg.paths.manifest_path, manifest)
+        print(f"Manifest escrito ({len(manifest)} archivos) en {cfg.paths.manifest_path}")
+        return 0
+    if action == "verify":
+        if not cfg.paths.manifest_path.exists():
+            print("No hay manifest. Ejecuta 'integrity snapshot' primero.")
+            return 2
+        manifest = v.load_manifest(cfg.paths.manifest_path)
+        result = v.verify(repo_root, manifest)
+        if result.ok:
+            print("Integridad OK")
+            return 0
+        print(f"VIOLACIÓN DE INTEGRIDAD: mismatched={result.mismatched} "
+              f"missing={result.missing} extra={result.extra}")
+        return 1
+    print(f"Acción inválida: {action} (usa snapshot|verify)")
+    return 2
+
+
+def _ipc_set_mode(runtime_state: RuntimeState, response_engine: ResponseEngine | None,
+                  mode: str) -> dict[str, str]:
+    from cerberus.core.config import _VALID_MODES
+    if mode not in _VALID_MODES:
+        return {"error": f"invalid mode {mode}"}
+    runtime_state.set_mode(mode)
+    if response_engine is not None:
+        response_engine.set_mode(mode)
+    return {"mode": mode}
 
 
 def cmd_rollback(cfg: CerberusConfig, action_id: str) -> int:
