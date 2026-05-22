@@ -174,3 +174,52 @@ async def test_net_collector_purges_stale_beacon_keys(monkeypatch):
         task.cancel()
 
     assert c.beacon_key_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_net_collector_emits_dns_query_from_injected_source():
+    from cerberus.collectors.net import DnsRecord
+
+    class _FakeDnsSource:
+        def __init__(self):
+            self._batches = iter([[DnsRecord(query_name="evil.example", query_type="A",
+                                             remote_ip="9.9.9.9")]])
+
+        def poll(self):
+            try:
+                return next(self._batches)
+            except StopIteration:
+                return []
+
+    def fake_net_connections(kind="inet"):
+        return []
+
+    bus = EventBus()
+    c = NetCollector(host="H", poll_interval_seconds=0.02,
+                     beaconing_window_seconds=60, beaconing_min_connections=10,
+                     dns_source=_FakeDnsSource())
+    with patch("cerberus.collectors.net.psutil.net_connections",
+               side_effect=fake_net_connections):
+        task = asyncio.create_task(c.start(bus))
+        received = await _collect_events(bus, target_count=1, wait_secs=1.0)
+        await c.stop()
+        task.cancel()
+    dns = [e for e in received if e.type == "dns_query"]
+    assert len(dns) >= 1
+    assert dns[0].indicators["query_name"] == "evil.example"
+    assert dns[0].indicators["remote_ip"] == "9.9.9.9"
+
+
+@pytest.mark.asyncio
+async def test_net_collector_no_dns_source_is_silent():
+    def fake_net_connections(kind="inet"):
+        return []
+    bus = EventBus()
+    c = NetCollector(host="H", poll_interval_seconds=0.02, dns_source="unavailable")
+    with patch("cerberus.collectors.net.psutil.net_connections",
+               side_effect=fake_net_connections):
+        task = asyncio.create_task(c.start(bus))
+        received = await _collect_events(bus, target_count=1, wait_secs=0.3)
+        await c.stop()
+        task.cancel()
+    assert [e for e in received if e.type == "dns_query"] == []

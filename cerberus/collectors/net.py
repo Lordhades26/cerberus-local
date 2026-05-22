@@ -4,7 +4,8 @@ import asyncio
 import ipaddress
 import time
 from collections import defaultdict, deque
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Protocol, runtime_checkable
 
 import psutil
 
@@ -25,6 +26,44 @@ def _is_routable(ip: str) -> bool:
     return not (addr.is_loopback or addr.is_link_local or addr.is_unspecified)
 
 
+@dataclass(frozen=True)
+class DnsRecord:
+    query_name: str
+    query_type: str
+    remote_ip: str | None = None
+
+
+@runtime_checkable
+class DnsSource(Protocol):
+    def poll(self) -> list[DnsRecord]: ...
+
+
+def _build_pyshark_source(interface: str | None = None) -> DnsSource | None:  # pragma: no cover
+    try:
+        import pyshark  # noqa: F401
+    except Exception:
+        return None
+    return _PySharkDnsSource(interface)
+
+
+class _PySharkDnsSource:  # pragma: no cover (requiere Npcap; validar en campo M6)
+    def __init__(self, interface: str | None) -> None:
+        import pyshark
+        self._cap = pyshark.LiveCapture(interface=interface, bpf_filter="udp port 53")
+
+    def poll(self) -> list[DnsRecord]:
+        out: list[DnsRecord] = []
+        for pkt in self._cap.sniff_continuously(packet_count=10):
+            try:
+                dns = pkt.dns
+                out.append(DnsRecord(query_name=str(dns.qry_name),
+                                     query_type=str(getattr(dns, "qry_type", "")),
+                                     remote_ip=str(getattr(pkt.ip, "dst", "")) or None))
+            except AttributeError:
+                continue
+        return out
+
+
 class NetCollector(Collector):
     """Detecta conexiones salientes y patrones de beaconing por polling psutil.
 
@@ -40,6 +79,7 @@ class NetCollector(Collector):
         poll_interval_seconds: float = 2.0,
         beaconing_window_seconds: int = 60,
         beaconing_min_connections: int = 10,
+        dns_source: DnsSource | str | None = None,
     ) -> None:
         super().__init__()
         self._host = host
@@ -51,11 +91,22 @@ class NetCollector(Collector):
         # historial de timestamps por (pid, remote_ip) para detectar beaconing
         self._beacon_hist: dict[tuple[int | None, str], deque[float]] = defaultdict(deque)
         self._beacon_alerted: set[tuple[int | None, str]] = set()
+        # captura DNS opcional (pyshark/Npcap; "unavailable" o source inyectado para tests)
+        self._dns_source_arg = dns_source
+        self._dns_source: DnsSource | None = None
         self._stop = asyncio.Event()
+
+    def _resolve_dns_source(self) -> DnsSource | None:
+        if self._dns_source_arg == "unavailable":
+            return None
+        if self._dns_source_arg is not None and not isinstance(self._dns_source_arg, str):
+            return self._dns_source_arg
+        return _build_pyshark_source()
 
     async def start(self, bus: EventBus) -> None:
         self._running = True
         self._stop.clear()
+        self._dns_source = self._resolve_dns_source()
         try:
             self._seed()
             while not self._stop.is_set():
@@ -127,6 +178,24 @@ class NetCollector(Collector):
             await self._track_beaconing(bus, pid, rip, now)
 
         self._known = current_keys
+
+        if self._dns_source is not None:
+            for rec in self._dns_source.poll():
+                ev = Event(
+                    source="net",
+                    type="dns_query",
+                    host=self._host,
+                    pid=None,
+                    user=None,
+                    raw={"query_type": rec.query_type},
+                    indicators={
+                        "query_name": rec.query_name,
+                        "query_type": rec.query_type,
+                        "remote_ip": rec.remote_ip,
+                    },
+                )
+                await bus.publish(ev)
+                self._events_emitted += 1
 
     async def _track_beaconing(
         self, bus: EventBus, pid: int | None, rip: str, now: float
