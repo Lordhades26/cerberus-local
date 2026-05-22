@@ -57,6 +57,7 @@ def _make_cfg(tmp_path: Path) -> CerberusConfig:
             net=NetCollectorConfig(
                 enabled=False, poll_interval_seconds=2.0,
                 beaconing_window_seconds=60, beaconing_min_connections=10,
+                dns_capture=False,
             ),
             fs=FsCollectorConfig(
                 enabled=False, watch_paths=[],

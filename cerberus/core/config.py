@@ -29,6 +29,7 @@ class NetCollectorConfig:
     poll_interval_seconds: float
     beaconing_window_seconds: int
     beaconing_min_connections: int
+    dns_capture: bool
 
 
 @dataclass(frozen=True)
@@ -153,6 +154,7 @@ def _net(raw: dict[str, Any]) -> NetCollectorConfig:
         poll_interval_seconds=float(raw.get("poll_interval_seconds", 2.0)),
         beaconing_window_seconds=int(raw.get("beaconing_window_seconds", 60)),
         beaconing_min_connections=int(raw.get("beaconing_min_connections", 10)),
+        dns_capture=bool(raw.get("dns_capture", False)),
     )
 
 

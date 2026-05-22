@@ -23,6 +23,7 @@ collectors:
     poll_interval_seconds: 2.0
     beaconing_window_seconds: 60
     beaconing_min_connections: 10
+    dns_capture: false               # requiere Npcap (M6 campo)
   fs:
     enabled: true
     watch_paths:
