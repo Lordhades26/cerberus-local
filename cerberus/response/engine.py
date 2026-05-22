@@ -45,6 +45,18 @@ class ResponseEngine:
         self._killswitch_path = Path(killswitch_path)
         self._auto_critical_categories = auto_critical_categories
 
+    @property
+    def mode(self) -> str:
+        return self._mode
+
+    def set_mode(self, mode: str) -> None:
+        from cerberus.core.config import _VALID_MODES
+        if mode not in _VALID_MODES:
+            raise ValueError(f"Invalid mode {mode!r}")
+        if mode != self._mode:
+            _log.info("mode_changed", extra={"from": self._mode, "to": mode})
+        self._mode = mode
+
     def _killswitch_active(self) -> bool:
         return self._killswitch_path.exists()
 
