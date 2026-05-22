@@ -35,3 +35,20 @@ def test_foreground_controller_status():
     assert c.status() == "running"
     c.stop()
     assert c.status() == "stopped"
+
+
+def test_pipe_sddl_restricts_to_system_and_admins():
+    from cerberus.service.named_pipe import pipe_sddl
+    sddl = pipe_sddl()
+    assert "(A;;GA;;;SY)" in sddl   # SYSTEM full access
+    assert "(A;;GA;;;BA)" in sddl   # Administrators full access
+    assert ";;;WD)" not in sddl     # nada para 'Everyone' (World)
+
+
+def test_serve_once_without_pywin32_raises(monkeypatch):
+    import cerberus.service.named_pipe as mod
+    monkeypatch.setattr(mod, "_load_pywin32", lambda: None)
+    t = mod.NamedPipeTransport(pipe_name=r"\\.\pipe\cerberus_test")
+    t.bind(lambda raw: raw)
+    with pytest.raises(mod.IpcUnavailable):
+        t.serve_once()

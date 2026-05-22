@@ -12,6 +12,14 @@ class IpcUnavailable(Exception):
     """El transporte named-pipe no está disponible (sin pywin32 / no-Windows)."""
 
 
+def pipe_sddl() -> str:
+    """SDDL del named pipe: full access (GA) solo a SYSTEM (SY) y Administrators (BA).
+
+    Evita que un usuario sin privilegios mande comandos al Service vía el pipe.
+    """
+    return "D:(A;;GA;;;SY)(A;;GA;;;BA)"
+
+
 def _load_pywin32() -> Any | None:
     try:
         import win32file
@@ -57,6 +65,33 @@ class NamedPipeTransport:
         _rc, data = win32file.ReadFile(handle, 65536)
         win32file.CloseHandle(handle)
         return bytes(data).decode("utf-8")
+
+    def serve_once(self) -> None:
+        """Atiende UNA conexión del pipe (lado servidor). E/S real -> M6 de campo."""
+        if not self.available():
+            raise IpcUnavailable("pywin32 no disponible")
+        self._serve_once_impl()  # pragma: no cover (M6 field)
+
+    def _serve_once_impl(self) -> None:  # pragma: no cover
+        assert self._win is not None and self._on_request is not None
+        import win32security
+        win32pipe, win32file = self._win
+        sd = win32security.ConvertStringSecurityDescriptorToSecurityDescriptor(
+            pipe_sddl(), win32security.SDDL_REVISION_1)
+        sa = win32security.SECURITY_ATTRIBUTES()
+        sa.SECURITY_DESCRIPTOR = sd
+        handle = win32pipe.CreateNamedPipe(
+            self._pipe_name,
+            win32pipe.PIPE_ACCESS_DUPLEX,
+            win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT,
+            1, 65536, 65536, 0, sa)
+        win32pipe.ConnectNamedPipe(handle, None)
+        _rc, data = win32file.ReadFile(handle, 65536)
+        resp = self._on_request(bytes(data).decode("utf-8"))
+        win32file.WriteFile(handle, resp.encode("utf-8"))
+        win32file.FlushFileBuffers(handle)
+        win32pipe.DisconnectNamedPipe(handle)
+        win32file.CloseHandle(handle)
 
     def stop(self) -> None:
         self._on_request = None
