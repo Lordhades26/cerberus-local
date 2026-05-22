@@ -39,7 +39,7 @@ class ProcCollector(Collector):
                     _log.error("proc_tick_error", extra={"error": str(exc)})
                 try:
                     await asyncio.wait_for(self._stop.wait(), timeout=self._interval)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
         finally:
             self._running = False

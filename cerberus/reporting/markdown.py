@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from cerberus.core.event import Event
@@ -15,7 +15,7 @@ class MarkdownReportWriter:
 
     @staticmethod
     def render(events: list[Event], host: str, when: datetime | None = None) -> str:
-        when = when or datetime.now(timezone.utc)
+        when = when or datetime.now(UTC)
         lines: list[str] = []
         lines.append("# CERBERUS-LOCAL — Reporte")
         lines.append("")
@@ -50,7 +50,7 @@ class MarkdownReportWriter:
         return "\n".join(lines)
 
     def write(self, events: list[Event], when: datetime | None = None) -> Path:
-        when = when or datetime.now(timezone.utc)
+        when = when or datetime.now(UTC)
         filename = when.strftime("%Y-%m-%d_%H-%M") + ".md"
         path = self.reports_dir / filename
         path.write_text(self.render(events, host=self.host, when=when), encoding="utf-8")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -78,7 +78,7 @@ class EventStore:
         return int(row["n"])
 
     def purge_older_than(self, days: int) -> int:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
         cur = self._conn.execute("DELETE FROM events WHERE timestamp < ?", (cutoff,))
         return cur.rowcount
 

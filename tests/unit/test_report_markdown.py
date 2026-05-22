@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from cerberus.core.event import Event
@@ -33,7 +33,7 @@ def test_render_report_groups_by_source():
 def test_write_creates_file(tmp_path: Path):
     writer = MarkdownReportWriter(reports_dir=tmp_path, host="H")
     events = [_ev("proc", "new_process", pid=10, indicators={"name": "x.exe"})]
-    path = writer.write(events, when=datetime(2026, 5, 21, 14, 30, tzinfo=timezone.utc))
+    path = writer.write(events, when=datetime(2026, 5, 21, 14, 30, tzinfo=UTC))
     assert path.exists()
     name = path.name
     assert name.startswith("2026-05-21_14-30") and name.endswith(".md")

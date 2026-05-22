@@ -1,5 +1,3 @@
-import asyncio
-import pytest
 
 from cerberus.core.event import Event
 from cerberus.core.event_bus import EventBus

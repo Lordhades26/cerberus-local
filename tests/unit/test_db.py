@@ -1,3 +1,4 @@
+from datetime import UTC
 from pathlib import Path
 
 import pytest
@@ -47,9 +48,9 @@ def test_count(store: EventStore):
 
 
 def test_purge_older_than_days(store: EventStore, monkeypatch):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
     old = _evt()
-    object.__setattr__(old, "timestamp", datetime.now(timezone.utc) - timedelta(days=10))
+    object.__setattr__(old, "timestamp", datetime.now(UTC) - timedelta(days=10))
     store.insert(old)
     store.insert(_evt())
     deleted = store.purge_older_than(days=7)

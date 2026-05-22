@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable
 
 from cerberus.core.event import Event
 from cerberus.core.logger import get_logger
@@ -17,7 +17,7 @@ Handler = Callable[[Event], Awaitable[None] | None]
 class Subscription:
     handler: Handler
     source_filter: str | None
-    _bus: "EventBus"
+    _bus: EventBus
     _alive: bool = field(default=True, repr=False)
 
     def unsubscribe(self) -> None:

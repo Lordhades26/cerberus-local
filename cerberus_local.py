@@ -7,7 +7,11 @@ import sys
 from pathlib import Path
 
 from cerberus.cli.commands import (
-    cmd_start, cmd_status, cmd_stop, cmd_version, resolve_config,
+    cmd_start,
+    cmd_status,
+    cmd_stop,
+    cmd_version,
+    resolve_config,
 )
 
 
