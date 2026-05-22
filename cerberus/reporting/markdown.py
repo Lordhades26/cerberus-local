@@ -6,6 +6,7 @@ from pathlib import Path
 
 from cerberus.core.event import Event, Severity
 from cerberus.core.finding import Finding
+from cerberus.response.actions import ActionReport
 
 
 class MarkdownReportWriter:
@@ -20,9 +21,11 @@ class MarkdownReportWriter:
         host: str,
         when: datetime | None = None,
         findings: list[Finding] | None = None,
+        action_reports: list[ActionReport] | None = None,
     ) -> str:
         when = when or datetime.now(UTC)
         findings = findings or []
+        action_reports = action_reports or []
         lines: list[str] = []
         lines.append("# CERBERUS-LOCAL — Reporte")
         lines.append("")
@@ -54,6 +57,20 @@ class MarkdownReportWriter:
                 lines.append(
                     f"| `{f.id}` | {sev} | {base} | {f.pid} | {rules} | {ai_cell} |"
                 )
+            lines.append("")
+
+        # --- Acciones de respuesta ---
+        if action_reports:
+            lines.append("## Acciones")
+            lines.append("")
+            lines.append("| Finding | Modo | Acción | Ejecutada | Éxito | Razón |")
+            lines.append("|---------|------|--------|-----------|-------|-------|")
+            for rep in action_reports:
+                for r in rep.results:
+                    lines.append(
+                        f"| `{rep.finding_id}` | {rep.mode} | {r.action.type} | "
+                        f"{r.executed} | {r.success} | {r.reason} |"
+                    )
             lines.append("")
 
         # --- Eventos por fuente ---
@@ -91,12 +108,14 @@ class MarkdownReportWriter:
         events: list[Event],
         when: datetime | None = None,
         findings: list[Finding] | None = None,
+        action_reports: list[ActionReport] | None = None,
     ) -> Path:
         when = when or datetime.now(UTC)
         filename = when.strftime("%Y-%m-%d_%H-%M") + ".md"
         path = self.reports_dir / filename
         path.write_text(
-            self.render(events, host=self.host, when=when, findings=findings),
+            self.render(events, host=self.host, when=when, findings=findings,
+                        action_reports=action_reports),
             encoding="utf-8",
         )
         return path

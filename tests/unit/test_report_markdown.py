@@ -98,3 +98,15 @@ def test_render_findings_shows_rule_and_triage():
     assert "ransomware_pattern_v1" in out
     assert "lockbit" in out
     assert "CRITICAL" in out
+
+
+def test_render_actions_section():
+    from cerberus.response.actions import Action, ActionReport, ActionResult
+    a = Action(type="kill_pid", params={"pid": 10})
+    r = ActionResult(action=a, executed=False, success=False, output="",
+                     command="taskkill /F /T /PID 10", reverted_command=None, reason="dry_run")
+    rep = ActionReport(finding_id="F1", mode="dry_run", results=[r])
+    out = MarkdownReportWriter.render([], host="H", findings=[], action_reports=[rep])
+    assert "## Acciones" in out
+    assert "kill_pid" in out
+    assert "dry_run" in out
