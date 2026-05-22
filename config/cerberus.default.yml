@@ -1,10 +1,11 @@
-# Cerberus M1 default config
+# Cerberus M2 default config
 mode: dry_run                       # dry_run | monitor (auto_* vienen en M3)
 host_name: null                     # null = autodetect
 
 paths:
   data_dir: "C:\\ProgramData\\Cerberus"
   events_db: "C:\\ProgramData\\Cerberus\\db\\events.db"
+  findings_db: "C:\\ProgramData\\Cerberus\\db\\findings.db"
   reports_dir: "C:\\Users\\Public\\cerberus_reports"
   log_file: "C:\\ProgramData\\Cerberus\\logs\\cerberus.log"
 
@@ -12,6 +13,28 @@ collectors:
   proc:
     enabled: true
     poll_interval_seconds: 1.0
+  net:
+    enabled: true
+    poll_interval_seconds: 2.0
+    beaconing_window_seconds: 60
+    beaconing_min_connections: 10
+  fs:
+    enabled: true
+    watch_paths:
+      - "C:\\Users\\Public"
+    mass_rename_threshold: 20
+    mass_rename_window_seconds: 5
+    high_entropy_threshold: 7.5
+  evt:
+    enabled: true                   # auto-deshabilitado si win32evtlog no está disponible
+    channels:
+      - "Security"
+      - "Microsoft-Windows-Sysmon/Operational"
+      - "Microsoft-Windows-PowerShell/Operational"
+
+correlator:
+  window_seconds: 10
+  min_sources_for_finding: 2
 
 reporting:
   interval_seconds: 300              # 5 minutos

@@ -1,6 +1,6 @@
 [project]
 name = "cerberus-local"
-version = "0.1.0"
+version = "0.2.0"
 description = "EDR híbrido Windows con IA local (fork defensivo de HADES-LOCAL)"
 requires-python = ">=3.11"
 license = {text = "MIT"}
@@ -8,9 +8,13 @@ authors = [{name = "Fabián Hormazábal", email = "combatelamejor@gmail.com"}]
 dependencies = [
     "psutil>=5.9.8",
     "pyyaml>=6.0.1",
+    "watchdog>=4.0.0",
 ]
 
 [project.optional-dependencies]
+windows = [
+    "pywin32>=306",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -21,6 +25,10 @@ dev = [
 
 [project.scripts]
 cerberus = "cerberus_local:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cerberus*"]
 
 [tool.ruff]
 line-length = 100
@@ -42,3 +50,7 @@ addopts = "-v --cov=cerberus --cov-report=term-missing --cov-fail-under=85"
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[[tool.mypy.overrides]]
+module = ["watchdog.*", "win32evtlog", "win32evtlogutil", "psutil"]
+ignore_missing_imports = true
