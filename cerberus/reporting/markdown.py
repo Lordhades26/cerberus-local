@@ -39,13 +39,21 @@ class MarkdownReportWriter:
             lines.append("Sin findings correlacionados en el intervalo.")
             lines.append("")
         else:
-            lines.append("| ID | Severidad | PID | Fuentes | Categorías |")
-            lines.append("|----|-----------|-----|---------|------------|")
+            lines.append("| ID | Severidad | Base | PID | Reglas | IA (familia/conf.) |")
+            lines.append("|----|-----------|------|-----|--------|--------------------|")
             for f in findings:
                 sev = Severity(f.severity).name
-                srcs = ", ".join(sorted(f.sources))
-                cats = ", ".join(sorted(f.categories))
-                lines.append(f"| `{f.id}` | {sev} | {f.pid} | {srcs} | {cats} |")
+                base = Severity(f.severity_base).name
+                rules = ", ".join(f.rule_ids) if f.rule_ids else "—"
+                if f.ai_triage:
+                    fam = f.ai_triage.get("family_guess") or "—"
+                    conf = f.ai_triage.get("confidence", 0.0)
+                    ai_cell = f"{fam} ({conf})"
+                else:
+                    ai_cell = "—"
+                lines.append(
+                    f"| `{f.id}` | {sev} | {base} | {f.pid} | {rules} | {ai_cell} |"
+                )
             lines.append("")
 
         # --- Eventos por fuente ---

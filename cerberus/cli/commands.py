@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from cerberus import __version__
+from cerberus.ai.ollama_client import OllamaClient
 from cerberus.collectors.base import Collector
 from cerberus.collectors.evt import EvtCollector
 from cerberus.collectors.fs import FsCollector
@@ -17,8 +18,11 @@ from cerberus.core.event import Event
 from cerberus.core.event_bus import EventBus
 from cerberus.core.finding import Finding
 from cerberus.core.logger import get_logger
+from cerberus.detection.ai_analyst import AIAnalyst
 from cerberus.detection.correlator import Correlator
 from cerberus.detection.finding_store import FindingStore
+from cerberus.detection.pipeline import DetectionPipeline
+from cerberus.detection.rule_engine import RuleEngine
 from cerberus.reporting.markdown import MarkdownReportWriter
 
 _log = get_logger("cerberus.cli")
@@ -86,6 +90,34 @@ def _build_collectors(cfg: CerberusConfig) -> list[Collector]:
     return collectors
 
 
+def _build_pipeline(cfg: CerberusConfig) -> DetectionPipeline:
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    rules_dir = cfg.detection.rule_engine.rules_dir
+    if not rules_dir.is_absolute():
+        rules_dir = repo_root / rules_dir
+    rule_engine = RuleEngine(rules_dir)
+    if cfg.detection.rule_engine.enabled:
+        n = rule_engine.load()
+        _log.info("rules_loaded", extra={"count": n})
+
+    ai_analyst: AIAnalyst | None = None
+    ai_enabled = cfg.detection.ai_analyst.enabled
+    if ai_enabled:
+        template_path = repo_root / "prompts" / "triage.md"
+        template = template_path.read_text(encoding="utf-8")
+        client = OllamaClient(
+            base_url=cfg.detection.ai_analyst.base_url,
+            timeout_seconds=cfg.detection.ai_analyst.timeout_seconds,
+        )
+        ai_analyst = AIAnalyst(
+            client,
+            model=cfg.detection.ai_analyst.model,
+            prompt_template=template,
+            max_severity_delta=cfg.detection.ai_analyst.max_severity_delta,
+        )
+    return DetectionPipeline(rule_engine, ai_analyst=ai_analyst, ai_enabled=ai_enabled)
+
+
 async def _run_loop(cfg: CerberusConfig) -> int:
     store = EventStore(cfg.paths.events_db)
     store.init_schema()
@@ -101,9 +133,12 @@ async def _run_loop(cfg: CerberusConfig) -> int:
         store.insert(ev)
         collected_events.append(ev)
 
+    pipeline = _build_pipeline(cfg)
+
     async def on_finding(f: Finding) -> None:
-        fstore.insert(f)
-        collected_findings.append(f)
+        enriched = await pipeline.process(f)
+        fstore.insert(enriched)
+        collected_findings.append(enriched)
 
     bus.subscribe(persist_event)
     correlator = Correlator(
