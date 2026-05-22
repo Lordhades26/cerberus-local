@@ -186,3 +186,73 @@ reporting: {interval_seconds: 60, retention_days: 1}
     assert cfg.detection.rule_engine.enabled is True
     assert cfg.detection.ai_analyst.enabled is True
     assert cfg.detection.ai_analyst.max_severity_delta == 1
+
+
+def test_load_response_config_and_auto_modes(tmp_path):
+    cfg_file = tmp_path / "c.yml"
+    cfg_file.write_text(
+        """
+mode: auto_critical
+host_name: null
+paths:
+  data_dir: /tmp/c
+  events_db: /tmp/c/e.db
+  findings_db: /tmp/c/f.db
+  actions_db: /tmp/c/a.db
+  reports_dir: /tmp/c/r
+  log_file: /tmp/c/l.log
+  killswitch_path: /tmp/c/KILLSWITCH
+  quarantine_dir: /tmp/c/quarantine
+collectors: {proc: {enabled: true, poll_interval_seconds: 1.0}}
+response:
+  enabled: true
+  policies_dir: policies
+  auto_critical_categories: [ransomware, c2, data_exfil]
+  rate: {max_actions_per_minute: 10, max_isolate_per_hour: 1}
+reporting: {interval_seconds: 60, retention_days: 1}
+""",
+        encoding="utf-8",
+    )
+    from cerberus.core.config import load_config
+    cfg = load_config(cfg_file)
+    assert cfg.mode == "auto_critical"
+    assert cfg.paths.actions_db == Path("/tmp/c/a.db")
+    assert "KILLSWITCH" in str(cfg.paths.killswitch_path)
+    assert cfg.response.enabled is True
+    assert "ransomware" in cfg.response.auto_critical_categories
+    assert cfg.response.rate.max_actions_per_minute == 10
+    assert cfg.response.rate.max_isolate_per_hour == 1
+
+
+def test_response_defaults_when_absent(tmp_path):
+    cfg_file = tmp_path / "c.yml"
+    cfg_file.write_text(
+        """
+mode: dry_run
+host_name: null
+paths:
+  data_dir: /tmp/c
+  events_db: /tmp/c/e.db
+  findings_db: /tmp/c/f.db
+  reports_dir: /tmp/c/r
+  log_file: /tmp/c/l.log
+collectors: {proc: {enabled: true, poll_interval_seconds: 1.0}}
+reporting: {interval_seconds: 60, retention_days: 1}
+""",
+        encoding="utf-8",
+    )
+    from cerberus.core.config import load_config
+    cfg = load_config(cfg_file)
+    assert cfg.response.enabled is True
+    assert cfg.response.rate.max_actions_per_minute == 10
+    assert str(cfg.paths.actions_db).endswith("actions_log.db")
+    assert str(cfg.paths.killswitch_path).endswith("KILLSWITCH")
+
+
+def test_invalid_mode_still_rejected(tmp_path):
+    import pytest
+    cfg_file = tmp_path / "c.yml"
+    cfg_file.write_text("mode: nuke\npaths: {}\ncollectors: {}\nreporting: {}\n")
+    from cerberus.core.config import load_config
+    with pytest.raises(ValueError):
+        load_config(cfg_file)

@@ -7,8 +7,8 @@ from typing import Any, Literal
 
 import yaml
 
-Mode = Literal["dry_run", "monitor"]
-_VALID_MODES = {"dry_run", "monitor"}
+Mode = Literal["dry_run", "monitor", "auto_critical", "auto_all"]
+_VALID_MODES = {"dry_run", "monitor", "auto_critical", "auto_all"}
 
 _DEFAULT_EVT_CHANNELS = [
     "Security",
@@ -82,12 +82,29 @@ class DetectionConfig:
 
 
 @dataclass(frozen=True)
+class RateConfig:
+    max_actions_per_minute: int
+    max_isolate_per_hour: int
+
+
+@dataclass(frozen=True)
+class ResponseConfig:
+    enabled: bool
+    policies_dir: Path
+    auto_critical_categories: frozenset[str]
+    rate: RateConfig
+
+
+@dataclass(frozen=True)
 class PathsConfig:
     data_dir: Path
     events_db: Path
     findings_db: Path
+    actions_db: Path
     reports_dir: Path
     log_file: Path
+    killswitch_path: Path
+    quarantine_dir: Path
 
 
 @dataclass(frozen=True)
@@ -104,6 +121,7 @@ class CerberusConfig:
     collectors: CollectorsConfig
     correlator: CorrelatorConfig
     detection: DetectionConfig
+    response: ResponseConfig
     reporting: ReportingConfig
 
 
@@ -159,6 +177,23 @@ def _detection(raw: dict[str, Any]) -> DetectionConfig:
     )
 
 
+_DEFAULT_AUTO_CRITICAL_CATEGORIES = ["ransomware", "c2", "data_exfil"]
+
+
+def _response(raw: dict[str, Any]) -> ResponseConfig:
+    rate_raw = raw.get("rate", {})
+    cats = raw.get("auto_critical_categories") or list(_DEFAULT_AUTO_CRITICAL_CATEGORIES)
+    return ResponseConfig(
+        enabled=bool(raw.get("enabled", True)),
+        policies_dir=Path(raw.get("policies_dir", "policies")),
+        auto_critical_categories=frozenset(str(c) for c in cats),
+        rate=RateConfig(
+            max_actions_per_minute=int(rate_raw.get("max_actions_per_minute", 10)),
+            max_isolate_per_hour=int(rate_raw.get("max_isolate_per_hour", 1)),
+        ),
+    )
+
+
 def load_config(path: Path | str) -> CerberusConfig:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     mode = raw.get("mode", "dry_run")
@@ -167,12 +202,16 @@ def load_config(path: Path | str) -> CerberusConfig:
     host = raw.get("host_name") or socket.gethostname()
 
     paths_raw = raw.get("paths", {})
+    data_dir = Path(paths_raw.get("data_dir", ""))
     paths = PathsConfig(
-        data_dir=Path(paths_raw.get("data_dir", "")),
+        data_dir=data_dir,
         events_db=Path(paths_raw.get("events_db", "")),
         findings_db=Path(paths_raw.get("findings_db", "")),
+        actions_db=Path(paths_raw.get("actions_db") or (data_dir / "db" / "actions_log.db")),
         reports_dir=Path(paths_raw.get("reports_dir", "")),
         log_file=Path(paths_raw.get("log_file", "")),
+        killswitch_path=Path(paths_raw.get("killswitch_path") or (data_dir / "KILLSWITCH")),
+        quarantine_dir=Path(paths_raw.get("quarantine_dir") or (data_dir / "Quarantine")),
     )
 
     coll_raw = raw.get("collectors", {})
@@ -190,6 +229,7 @@ def load_config(path: Path | str) -> CerberusConfig:
     )
 
     detection = _detection(raw.get("detection", {}))
+    response = _response(raw.get("response", {}))
 
     rep_raw = raw.get("reporting", {})
     reporting = ReportingConfig(
@@ -204,5 +244,6 @@ def load_config(path: Path | str) -> CerberusConfig:
         collectors=collectors,
         correlator=correlator,
         detection=detection,
+        response=response,
         reporting=reporting,
     )

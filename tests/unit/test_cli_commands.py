@@ -24,7 +24,9 @@ from cerberus.core.config import (
     NetCollectorConfig,
     PathsConfig,
     ProcCollectorConfig,
+    RateConfig,
     ReportingConfig,
+    ResponseConfig,
     RuleEngineConfig,
 )
 
@@ -40,8 +42,11 @@ def _make_cfg(tmp_path: Path) -> CerberusConfig:
             data_dir=tmp_path,
             events_db=tmp_path / "events.db",
             findings_db=tmp_path / "findings.db",
+            actions_db=tmp_path / "actions.db",
             reports_dir=tmp_path / "reports",
             log_file=tmp_path / "cerberus.log",
+            killswitch_path=tmp_path / "KILLSWITCH",
+            quarantine_dir=tmp_path / "quarantine",
         ),
         collectors=CollectorsConfig(
             proc=ProcCollectorConfig(enabled=True, poll_interval_seconds=0.05),
@@ -63,6 +68,11 @@ def _make_cfg(tmp_path: Path) -> CerberusConfig:
                 enabled=False, model="qwen2.5-coder:14b", base_url=None,
                 timeout_seconds=20.0, max_severity_delta=1,
             ),
+        ),
+        response=ResponseConfig(
+            enabled=False, policies_dir=Path("policies"),
+            auto_critical_categories=frozenset({"ransomware", "c2", "data_exfil"}),
+            rate=RateConfig(max_actions_per_minute=10, max_isolate_per_hour=1),
         ),
         reporting=ReportingConfig(interval_seconds=300, retention_days=7),
     )

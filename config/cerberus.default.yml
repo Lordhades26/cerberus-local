@@ -6,8 +6,11 @@ paths:
   data_dir: "C:\\ProgramData\\Cerberus"
   events_db: "C:\\ProgramData\\Cerberus\\db\\events.db"
   findings_db: "C:\\ProgramData\\Cerberus\\db\\findings.db"
+  actions_db: "C:\\ProgramData\\Cerberus\\db\\actions_log.db"
   reports_dir: "C:\\Users\\Public\\cerberus_reports"
   log_file: "C:\\ProgramData\\Cerberus\\logs\\cerberus.log"
+  killswitch_path: "C:\\ProgramData\\Cerberus\\KILLSWITCH"
+  quarantine_dir: "C:\\ProgramData\\Cerberus\\Quarantine"
 
 collectors:
   proc:
@@ -35,6 +38,14 @@ collectors:
 correlator:
   window_seconds: 10
   min_sources_for_finding: 2
+
+response:
+  enabled: true
+  policies_dir: "policies"
+  auto_critical_categories: [ransomware, c2, data_exfil]
+  rate:
+    max_actions_per_minute: 10
+    max_isolate_per_hour: 1
 
 detection:
   rule_engine:
