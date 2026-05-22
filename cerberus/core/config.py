@@ -61,6 +61,27 @@ class CorrelatorConfig:
 
 
 @dataclass(frozen=True)
+class RuleEngineConfig:
+    enabled: bool
+    rules_dir: Path
+
+
+@dataclass(frozen=True)
+class AIAnalystConfig:
+    enabled: bool
+    model: str
+    base_url: str | None
+    timeout_seconds: float
+    max_severity_delta: int
+
+
+@dataclass(frozen=True)
+class DetectionConfig:
+    rule_engine: RuleEngineConfig
+    ai_analyst: AIAnalystConfig
+
+
+@dataclass(frozen=True)
 class PathsConfig:
     data_dir: Path
     events_db: Path
@@ -82,6 +103,7 @@ class CerberusConfig:
     paths: PathsConfig
     collectors: CollectorsConfig
     correlator: CorrelatorConfig
+    detection: DetectionConfig
     reporting: ReportingConfig
 
 
@@ -119,6 +141,24 @@ def _evt(raw: dict[str, Any]) -> EvtCollectorConfig:
     )
 
 
+def _detection(raw: dict[str, Any]) -> DetectionConfig:
+    re_raw = raw.get("rule_engine", {})
+    ai_raw = raw.get("ai_analyst", {})
+    return DetectionConfig(
+        rule_engine=RuleEngineConfig(
+            enabled=bool(re_raw.get("enabled", True)),
+            rules_dir=Path(re_raw.get("rules_dir", "rules")),
+        ),
+        ai_analyst=AIAnalystConfig(
+            enabled=bool(ai_raw.get("enabled", True)),
+            model=str(ai_raw.get("model", "qwen2.5-coder:14b")),
+            base_url=ai_raw.get("base_url"),
+            timeout_seconds=float(ai_raw.get("timeout_seconds", 20.0)),
+            max_severity_delta=int(ai_raw.get("max_severity_delta", 1)),
+        ),
+    )
+
+
 def load_config(path: Path | str) -> CerberusConfig:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     mode = raw.get("mode", "dry_run")
@@ -149,6 +189,8 @@ def load_config(path: Path | str) -> CerberusConfig:
         min_sources_for_finding=int(corr_raw.get("min_sources_for_finding", 2)),
     )
 
+    detection = _detection(raw.get("detection", {}))
+
     rep_raw = raw.get("reporting", {})
     reporting = ReportingConfig(
         interval_seconds=int(rep_raw.get("interval_seconds", 300)),
@@ -161,5 +203,6 @@ def load_config(path: Path | str) -> CerberusConfig:
         paths=paths,
         collectors=collectors,
         correlator=correlator,
+        detection=detection,
         reporting=reporting,
     )

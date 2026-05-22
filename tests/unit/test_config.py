@@ -128,3 +128,61 @@ reporting: {interval_seconds: 60, retention_days: 1}
     assert cfg.collectors.fs.mass_rename_threshold == 20
     assert cfg.collectors.evt.channels  # lista no vacia por defecto
     assert cfg.correlator.window_seconds == 10
+
+
+def test_load_detection_config(tmp_path):
+    cfg_file = tmp_path / "c.yml"
+    cfg_file.write_text(
+        """
+mode: dry_run
+host_name: null
+paths:
+  data_dir: /tmp/c
+  events_db: /tmp/c/e.db
+  findings_db: /tmp/c/f.db
+  reports_dir: /tmp/c/r
+  log_file: /tmp/c/l.log
+collectors: {proc: {enabled: true, poll_interval_seconds: 1.0}}
+detection:
+  rule_engine: {enabled: true, rules_dir: rules}
+  ai_analyst:
+    enabled: true
+    model: qwen2.5-coder:14b
+    base_url: null
+    timeout_seconds: 20.0
+    max_severity_delta: 1
+reporting: {interval_seconds: 60, retention_days: 1}
+""",
+        encoding="utf-8",
+    )
+    from cerberus.core.config import load_config
+    cfg = load_config(cfg_file)
+    assert cfg.detection.rule_engine.enabled is True
+    assert str(cfg.detection.rule_engine.rules_dir) == "rules"
+    assert cfg.detection.ai_analyst.model == "qwen2.5-coder:14b"
+    assert cfg.detection.ai_analyst.base_url is None
+    assert cfg.detection.ai_analyst.max_severity_delta == 1
+
+
+def test_detection_defaults_when_absent(tmp_path):
+    cfg_file = tmp_path / "c.yml"
+    cfg_file.write_text(
+        """
+mode: dry_run
+host_name: null
+paths:
+  data_dir: /tmp/c
+  events_db: /tmp/c/e.db
+  findings_db: /tmp/c/f.db
+  reports_dir: /tmp/c/r
+  log_file: /tmp/c/l.log
+collectors: {proc: {enabled: true, poll_interval_seconds: 1.0}}
+reporting: {interval_seconds: 60, retention_days: 1}
+""",
+        encoding="utf-8",
+    )
+    from cerberus.core.config import load_config
+    cfg = load_config(cfg_file)
+    assert cfg.detection.rule_engine.enabled is True
+    assert cfg.detection.ai_analyst.enabled is True
+    assert cfg.detection.ai_analyst.max_severity_delta == 1

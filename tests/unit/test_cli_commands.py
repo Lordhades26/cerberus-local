@@ -14,15 +14,18 @@ from cerberus.cli.commands import (
     resolve_config,
 )
 from cerberus.core.config import (
+    AIAnalystConfig,
     CerberusConfig,
     CollectorsConfig,
     CorrelatorConfig,
+    DetectionConfig,
     EvtCollectorConfig,
     FsCollectorConfig,
     NetCollectorConfig,
     PathsConfig,
     ProcCollectorConfig,
     ReportingConfig,
+    RuleEngineConfig,
 )
 
 # ---------------------------------------------------------------------------
@@ -54,6 +57,13 @@ def _make_cfg(tmp_path: Path) -> CerberusConfig:
             evt=EvtCollectorConfig(enabled=False, channels=["Security"]),
         ),
         correlator=CorrelatorConfig(window_seconds=10, min_sources_for_finding=2),
+        detection=DetectionConfig(
+            rule_engine=RuleEngineConfig(enabled=True, rules_dir=Path("rules")),
+            ai_analyst=AIAnalystConfig(
+                enabled=False, model="qwen2.5-coder:14b", base_url=None,
+                timeout_seconds=20.0, max_severity_delta=1,
+            ),
+        ),
         reporting=ReportingConfig(interval_seconds=300, retention_days=7),
     )
 
