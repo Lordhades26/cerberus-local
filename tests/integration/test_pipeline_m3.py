@@ -31,7 +31,7 @@ async def test_m3_detection_pipeline_enriches_and_persists(tmp_path: Path):
     fstore.init_schema()
 
     rule_engine = RuleEngine(_RULES_DIR)
-    assert rule_engine.load() == 4
+    assert rule_engine.load() == 5
     analyst = AIAnalyst(_FakeClient(), model="m", prompt_template=_TEMPLATE,
                         max_severity_delta=1)
     pipeline = DetectionPipeline(rule_engine, ai_analyst=analyst, ai_enabled=True)

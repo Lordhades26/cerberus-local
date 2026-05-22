@@ -7,6 +7,16 @@ construido y testeado en M1–M5. Cada apartado indica cómo verificarlo.
 > **Regla de oro:** nunca habilitar modos `auto_*` ni probar acciones reales fuera de
 > una VM aislada con snapshot/restore. El modo `dry_run` es el default obligatorio.
 
+## Artefactos ya provistos (andamiaje M6, en el repo)
+
+El código/seams escribibles ya están construidos y testeados (v0.6.0-m6); aquí solo se
+**valida en Windows real**:
+- `cerberus_service.py` — entry-point `win32serviceutil.ServiceFramework` (scaffold).
+- `cerberus/service/controller.py::Win32ServiceController` — builders de `sc.exe` + parser de `sc query`.
+- `cerberus/service/named_pipe.py::pipe_sddl()` + `serve_once()` — server del pipe con ACL SYSTEM/Admins.
+- `cerberus/collectors/net.py::_PySharkDnsSource` — captura DNS (`dns_query`); activar con `collectors.net.dns_capture: true`.
+- `packaging/cerberus.wxs`, `packaging/build_msi.ps1`, `packaging/install_service.ps1`.
+
 ## 1. Windows Service (pywin32)
 
 Envolver el bucle de `cerberus_local.py start` en un servicio:
