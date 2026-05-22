@@ -39,3 +39,38 @@ def test_write_creates_file(tmp_path: Path):
     assert name.startswith("2026-05-21_14-30") and name.endswith(".md")
     content = path.read_text(encoding="utf-8")
     assert "## proc" in content
+
+
+def test_render_with_findings_section():
+    from cerberus.core.finding import Finding
+
+    def _e(source, type_, pid=10):
+        return Event(source=source, type=type_, host="H", pid=pid,
+                     user="u", raw={}, indicators={})
+
+    events = [_e("proc", "new_process"), _e("net", "outbound_conn")]
+    finding = Finding.from_cluster(host="H", pid=10, user="u", evidence=events)
+    out = MarkdownReportWriter.render(events, host="H", findings=[finding])
+    assert "## Findings" in out
+    assert "**Total findings:** 1" in out
+    assert finding.id in out
+    assert "proc" in out and "net" in out
+
+
+def test_render_no_findings_shows_zero():
+    out = MarkdownReportWriter.render([], host="H", findings=[])
+    assert "**Total findings:** 0" in out
+
+
+def test_write_with_findings(tmp_path: Path):
+    from cerberus.core.finding import Finding
+    writer = MarkdownReportWriter(reports_dir=tmp_path, host="H")
+    events = [Event(source="proc", type="new_process", host="H", pid=10,
+                    user="u", raw={}, indicators={}),
+              Event(source="fs", type="mass_rename", host="H", pid=10,
+                    user="u", raw={}, indicators={})]
+    finding = Finding.from_cluster(host="H", pid=10, user="u", evidence=events)
+    path = writer.write(events, findings=[finding])
+    content = path.read_text(encoding="utf-8")
+    assert "## Findings" in content
+    assert "mass_rename" in content
