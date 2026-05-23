@@ -221,5 +221,13 @@ document.querySelectorAll(".nav-item[data-target]").forEach((a) => {
   });
 });
 
-refresh();
-setInterval(refresh, REFRESH_MS);
+// Si se abre el archivo directamente (file://) no hay servidor que sirva /api/*.
+// Evita el fallo silencioso y explica cómo abrirlo bien.
+if (location.protocol === "file:") {
+  setConn(false);
+  $("updated").textContent =
+    "Abre el panel vía el servidor: ejecuta `cerberus dashboard` y entra a la URL que imprime (p. ej. http://127.0.0.1:8787). No abras este archivo directamente.";
+} else {
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+}

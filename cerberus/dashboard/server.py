@@ -11,7 +11,7 @@ from cerberus.dashboard.data import DashboardData
 
 _log = get_logger("cerberus.dashboard.server")
 
-_STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "dashboard"
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
 # Allowlist de archivos estáticos (evita path traversal).
 _STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),

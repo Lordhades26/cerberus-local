@@ -30,6 +30,9 @@ cerberus = "cerberus_local:main"
 where = ["."]
 include = ["cerberus*"]
 
+[tool.setuptools.package-data]
+"cerberus.dashboard" = ["static/*"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
