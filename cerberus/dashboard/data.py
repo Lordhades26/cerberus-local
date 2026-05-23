@@ -31,22 +31,27 @@ class DashboardData:
 
     def __init__(self, cfg: CerberusConfig) -> None:
         self._cfg = cfg
+        # Inicializa el schema UNA sola vez (DDL = escritura). Las lecturas por
+        # request abren sin init_schema, así varios hilos del dashboard concurren
+        # solo como lectores (WAL) en vez de competir por un lock de escritura DDL
+        # ("database is locked").
+        for store in (
+            EventStore(self._cfg.paths.events_db),
+            FindingStore(self._cfg.paths.findings_db),
+            ActionStore(self._cfg.paths.actions_db),
+        ):
+            store.init_schema()
+            store.close()
 
-    # ---- helpers de apertura ----
+    # ---- helpers de apertura (solo conexión; el schema ya existe) ----
     def _events(self) -> EventStore:
-        s = EventStore(self._cfg.paths.events_db)
-        s.init_schema()
-        return s
+        return EventStore(self._cfg.paths.events_db)
 
     def _findings(self) -> FindingStore:
-        s = FindingStore(self._cfg.paths.findings_db)
-        s.init_schema()
-        return s
+        return FindingStore(self._cfg.paths.findings_db)
 
     def _actions(self) -> ActionStore:
-        s = ActionStore(self._cfg.paths.actions_db)
-        s.init_schema()
-        return s
+        return ActionStore(self._cfg.paths.actions_db)
 
     # ---- endpoints ----
     def status(self) -> dict[str, Any]:

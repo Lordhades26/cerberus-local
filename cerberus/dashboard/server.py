@@ -95,10 +95,18 @@ class _Handler(BaseHTTPRequestHandler):
         self._send_json(405, {"error": "method not allowed (read-only dashboard)"})
 
 
+class _DashboardHTTPServer(ThreadingHTTPServer):
+    # Backlog amplio: ráfagas de conexiones (refresco del panel + varias pestañas)
+    # no deben rebotar con "connection refused"/timeout al saturar el accept queue.
+    request_queue_size = 128
+    daemon_threads = True
+    allow_reuse_address = True
+
+
 def make_server(cfg: CerberusConfig) -> ThreadingHTTPServer:
     data = DashboardData(cfg)
     handler = type("_BoundHandler", (_Handler,), {"data": data})
-    server = ThreadingHTTPServer((cfg.dashboard.host, cfg.dashboard.port), handler)
+    server = _DashboardHTTPServer((cfg.dashboard.host, cfg.dashboard.port), handler)
     return server
 
 

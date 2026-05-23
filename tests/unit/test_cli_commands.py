@@ -285,3 +285,21 @@ def test_cmd_integrity_snapshot_then_verify(tmp_path: Path) -> None:
 def test_cmd_integrity_verify_without_manifest(tmp_path: Path) -> None:
     from cerberus.cli.commands import cmd_integrity
     assert cmd_integrity(_make_cfg(tmp_path), "verify") == 2
+
+
+def test_build_dashboard_disabled_returns_none(tmp_path: Path) -> None:
+    from cerberus.cli.commands import _build_dashboard
+    cfg = _make_cfg(tmp_path)  # dashboard.enabled = False
+    assert _build_dashboard(cfg) is None
+
+
+def test_build_dashboard_enabled_returns_server(tmp_path: Path) -> None:
+    import dataclasses
+
+    from cerberus.cli.commands import _build_dashboard
+    from cerberus.dashboard.server import DashboardServer
+    cfg = _make_cfg(tmp_path)
+    cfg = dataclasses.replace(
+        cfg, dashboard=dataclasses.replace(cfg.dashboard, enabled=True, port=0))
+    server = _build_dashboard(cfg)
+    assert isinstance(server, DashboardServer)

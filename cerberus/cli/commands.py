@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -172,6 +173,13 @@ def _startup_integrity_violation(cfg: CerberusConfig) -> bool:
     return False
 
 
+def _build_dashboard(cfg: CerberusConfig) -> DashboardServer | None:
+    """Devuelve un DashboardServer si está habilitado, listo para servir en un hilo."""
+    if not cfg.dashboard.enabled:
+        return None
+    return DashboardServer(cfg)
+
+
 async def _run_loop(cfg: CerberusConfig) -> int:
     store = EventStore(cfg.paths.events_db)
     store.init_schema()
@@ -232,6 +240,16 @@ async def _run_loop(cfg: CerberusConfig) -> int:
         ipc_server = IpcServer(transport, dispatcher)
         ipc_server.start()
 
+    # Dashboard de operación (HTTP read-only) en un hilo daemon.
+    dashboard = _build_dashboard(cfg)
+    dashboard_thread: threading.Thread | None = None
+    if dashboard is not None:
+        host, port = dashboard.start()
+        dashboard_thread = threading.Thread(
+            target=dashboard.serve_forever, daemon=True, name="dashboard")
+        dashboard_thread.start()
+        _log.info("dashboard_started", extra={"url": f"http://{host}:{port}"})
+
     collectors = _build_collectors(cfg)
     collector_tasks = [
         asyncio.create_task(c.start(bus), name=f"collector_{c.name}")
@@ -278,6 +296,8 @@ async def _run_loop(cfg: CerberusConfig) -> int:
         await bus.stop()
         if ipc_server is not None:
             ipc_server.stop()
+        if dashboard is not None:
+            dashboard.stop()
         if collected_events or collected_findings or collected_action_reports:
             writer.write(collected_events, when=datetime.now(UTC),
                          findings=collected_findings,
