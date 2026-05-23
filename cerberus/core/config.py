@@ -122,6 +122,14 @@ class IntegrityConfig:
 
 
 @dataclass(frozen=True)
+class DashboardConfig:
+    enabled: bool
+    host: str
+    port: int
+    refresh_seconds: int
+
+
+@dataclass(frozen=True)
 class ReportingConfig:
     interval_seconds: int
     retention_days: int
@@ -138,6 +146,7 @@ class CerberusConfig:
     response: ResponseConfig
     ipc: IpcConfig
     integrity: IntegrityConfig
+    dashboard: DashboardConfig
     reporting: ReportingConfig
 
 
@@ -258,6 +267,14 @@ def load_config(path: Path | str) -> CerberusConfig:
     integrity_raw = raw.get("integrity", {})
     integrity = IntegrityConfig(enabled=bool(integrity_raw.get("enabled", True)))
 
+    dash_raw = raw.get("dashboard", {})
+    dashboard = DashboardConfig(
+        enabled=bool(dash_raw.get("enabled", True)),
+        host=str(dash_raw.get("host", "127.0.0.1")),
+        port=int(dash_raw.get("port", 8787)),
+        refresh_seconds=int(dash_raw.get("refresh_seconds", 5)),
+    )
+
     rep_raw = raw.get("reporting", {})
     reporting = ReportingConfig(
         interval_seconds=int(rep_raw.get("interval_seconds", 300)),
@@ -274,5 +291,6 @@ def load_config(path: Path | str) -> CerberusConfig:
         response=response,
         ipc=ipc,
         integrity=integrity,
+        dashboard=dashboard,
         reporting=reporting,
     )

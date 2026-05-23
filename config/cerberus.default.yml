@@ -57,6 +57,12 @@ ipc:
 integrity:
   enabled: true
 
+dashboard:
+  enabled: true
+  host: "127.0.0.1"
+  port: 8787
+  refresh_seconds: 5
+
 detection:
   rule_engine:
     enabled: true

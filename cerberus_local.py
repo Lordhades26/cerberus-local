@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from cerberus.cli.commands import (
+    cmd_dashboard,
     cmd_integrity,
     cmd_mode,
     cmd_rollback,
@@ -35,6 +36,8 @@ def _build_parser() -> argparse.ArgumentParser:
     ig = sub.add_parser("integrity")
     ig.add_argument("action", choices=["snapshot", "verify"])
     ig.add_argument("--config", type=Path, default=None)
+    db = sub.add_parser("dashboard")
+    db.add_argument("--config", type=Path, default=None)
     sub.add_parser("version")
     return p
 
@@ -56,6 +59,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_rollback(cfg, args.action_id)
     if args.command == "integrity":
         return cmd_integrity(cfg, args.action)
+    if args.command == "dashboard":
+        return cmd_dashboard(cfg)
     return 2
 
 

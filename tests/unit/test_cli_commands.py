@@ -18,6 +18,7 @@ from cerberus.core.config import (
     CerberusConfig,
     CollectorsConfig,
     CorrelatorConfig,
+    DashboardConfig,
     DetectionConfig,
     EvtCollectorConfig,
     FsCollectorConfig,
@@ -81,6 +82,8 @@ def _make_cfg(tmp_path: Path) -> CerberusConfig:
         ),
         ipc=IpcConfig(enabled=False, pipe_name=r"\\.\pipe\cerberus_test"),
         integrity=IntegrityConfig(enabled=False),
+        dashboard=DashboardConfig(enabled=False, host="127.0.0.1", port=8787,
+                                  refresh_seconds=5),
         reporting=ReportingConfig(interval_seconds=300, retention_days=7),
     )
 

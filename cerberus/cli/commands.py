@@ -19,6 +19,7 @@ from cerberus.core.event_bus import EventBus
 from cerberus.core.finding import Finding
 from cerberus.core.logger import get_logger
 from cerberus.core.runtime_state import RuntimeState
+from cerberus.dashboard.server import DashboardServer
 from cerberus.detection.ai_analyst import AIAnalyst
 from cerberus.detection.correlator import Correlator
 from cerberus.detection.finding_store import FindingStore
@@ -325,6 +326,22 @@ def cmd_mode(cfg: CerberusConfig, new_mode: str) -> int:
         return 2
     RuntimeState(cfg.paths.state_file).set_mode(new_mode)
     print(f"Modo persistido: {new_mode}. Un agente en ejecución lo aplicará en caliente.")
+    return 0
+
+
+def cmd_dashboard(cfg: CerberusConfig) -> int:
+    if not cfg.dashboard.enabled:
+        print("Dashboard deshabilitado (dashboard.enabled=false en config).")
+        return 0
+    server = DashboardServer(cfg)
+    host, port = server.start()
+    print(f"Dashboard de CERBERUS en http://{host}:{port}  (Ctrl+C para detener)")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.stop()
     return 0
 
 
