@@ -12,6 +12,21 @@ from cerberus.dashboard.data import DashboardData
 _log = get_logger("cerberus.dashboard.server")
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+# CSP deny-by-default: el panel solo carga su propio JS/CSS y hace fetch a /api
+# del mismo origen. Sin 'unsafe-inline'/'unsafe-eval' (no hay <script>/<style>
+# inline ni eval), así un XSS por contenido reflejado no puede ejecutar nada.
+_CSP = (
+    "default-src 'none'; "
+    "script-src 'self'; "
+    "style-src 'self'; "
+    "img-src 'self'; "
+    "connect-src 'self'; "
+    "base-uri 'none'; "
+    "form-action 'none'; "
+    "frame-ancestors 'none'"
+)
+
 # Allowlist de archivos estáticos (evita path traversal).
 _STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
@@ -50,6 +65,9 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Security-Policy", _CSP)
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Frame-Options", "DENY")
         self.end_headers()
         self.wfile.write(body)
 

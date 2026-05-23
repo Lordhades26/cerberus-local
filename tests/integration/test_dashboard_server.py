@@ -77,6 +77,43 @@ def test_dashboard_server_http_roundtrip(tmp_path):
     assert payload["events_total"] == 1
 
 
+def test_dashboard_server_sets_security_headers(tmp_path):
+    """CSP estricto + cabeceras de endurecimiento en respuestas estáticas y de API."""
+    cfg = _cfg(tmp_path, port=0)
+    server = DashboardServer(cfg)
+    host, port = server.start()
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        conn = http.client.HTTPConnection(host, port, timeout=5)
+        conn.request("GET", "/")
+        index = conn.getresponse()
+        index.read()
+        index_csp = index.getheader("Content-Security-Policy")
+        index_ref = index.getheader("Referrer-Policy")
+        index_xfo = index.getheader("X-Frame-Options")
+        conn.request("GET", "/api/summary")
+        api = conn.getresponse()
+        api.read()
+        api_csp = api.getheader("Content-Security-Policy")
+        conn.close()
+    except OSError as exc:
+        server.stop()
+        pytest.skip(f"loopback HTTP no disponible en el harness: {exc}")
+    server.stop()
+    # CSP deny-by-default, sin 'unsafe-inline'/'unsafe-eval' (defensa XSS real).
+    assert index_csp is not None
+    assert "default-src 'none'" in index_csp
+    assert "script-src 'self'" in index_csp
+    assert "frame-ancestors 'none'" in index_csp
+    assert "unsafe-inline" not in index_csp
+    assert "unsafe-eval" not in index_csp
+    assert index_ref == "no-referrer"
+    assert index_xfo == "DENY"
+    # Cabeceras uniformes: la API también las lleva.
+    assert api_csp == index_csp
+
+
 def test_dashboard_server_serves_index_and_404(tmp_path):
     cfg = _cfg(tmp_path, port=0)
     server = DashboardServer(cfg)
