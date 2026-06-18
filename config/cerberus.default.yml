@@ -60,7 +60,7 @@ integrity:
 dashboard:
   enabled: true
   host: "127.0.0.1"
-  port: 8787
+  port: 5000
   refresh_seconds: 5
 
 detection:

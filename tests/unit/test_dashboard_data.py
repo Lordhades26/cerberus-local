@@ -130,3 +130,128 @@ def test_metrics(data):
     assert m["actions_total"] == 2
     assert m["auto_executed_pct"] == 50.0
     assert m["findings_with_ai"] == 1
+
+
+def test_sysinfo(data):
+    info = data.sysinfo()
+    assert isinstance(info, dict)
+    for key in ["cpu", "ram", "gpu", "disk", "temp", "fan"]:
+        assert key in info
+        assert isinstance(info[key], (int, float))
+
+
+def test_set_mode(data):
+    # Probar modos válidos
+    assert data.set_mode("monitor") is True
+    # Probar modo inválido
+    assert data.set_mode("invalid_mode") is False
+
+
+def test_processes(data):
+    procs = data.processes(limit=5)
+    assert isinstance(procs, list)
+    assert len(procs) <= 5
+    for p in procs:
+        assert "pid" in p
+        assert "name" in p
+        assert "cpu_percent" in p
+        assert isinstance(p["cpu_percent"], float)
+
+
+def test_processes_with_exceptions(data, monkeypatch):
+    import psutil
+    class MockProcess:
+        def __init__(self, pid):
+            self.pid = pid
+            self.info = {'pid': pid, 'name': 'test', 'cpu_percent': 10.0}
+
+    def mock_process_iter(attrs=None):
+        # Uno normal, uno que levanta NoSuchProcess, uno que levanta AccessDenied
+        # Nota: iteraremos sobre esto, simulamos una propiedad o comportamiento del iterador
+        class BadIter:
+            def __iter__(self):
+                yield MockProcess(123)
+                # Simulamos excepciones al acceder a .info o al iterar
+                # Pero en data.py el try/except está dentro del loop al acceder a p.info
+                p_bad1 = MockProcess(999)
+                del p_bad1.info  # Acceder levantará KeyError o AttributeError, pero podemos usar un property para lanzar excepciones específicas
+                yield p_bad1
+        return BadIter()
+
+    # En su lugar, usemos propiedades reales que lancen psutil.NoSuchProcess
+    class MockBadProcess1:
+        def __init__(self, pid):
+            self.pid = pid
+        @property
+        def info(self):
+            raise psutil.NoSuchProcess(self.pid)
+
+    class MockBadProcess2:
+        def __init__(self, pid):
+            self.pid = pid
+        @property
+        def info(self):
+            raise psutil.AccessDenied(self.pid)
+
+    class MockGoodProcess:
+        def __init__(self, pid):
+            self.pid = pid
+            self.info = {'pid': pid, 'name': 'test', 'cpu_percent': 10.0}
+
+    def mock_process_iter_v2(attrs=None):
+        return [MockGoodProcess(123), MockBadProcess1(999), MockBadProcess2(998)]
+
+    monkeypatch.setattr(psutil, "process_iter", mock_process_iter_v2)
+    procs = data.processes(limit=5)
+    assert len(procs) == 1
+    assert procs[0]["pid"] == 123
+
+
+def test_hour_bucket_value_error():
+    from cerberus.dashboard.data import _hour_bucket
+    assert _hour_bucket("invalid-date-string") == "unknown"
+
+
+def test_generate_docx_report(data):
+    import os
+    filepath = data.generate_docx_report()
+    assert filepath is not None
+    assert os.path.exists(filepath)
+    # Cleanup del reporte generado en tests
+    try:
+        os.remove(filepath)
+    except Exception:
+        pass
+
+
+def test_generate_docx_report_import_error(data, monkeypatch):
+    import sys
+    # Forzar ImportError al importar docx
+    monkeypatch.setitem(sys.modules, "docx", None)
+    filepath = data.generate_docx_report()
+    assert filepath is None
+
+
+def test_sysinfo_exceptions(data, monkeypatch):
+    import psutil
+    def mock_cpu_percent(interval=None):
+        raise RuntimeError("simulated error")
+    monkeypatch.setattr(psutil, "cpu_percent", mock_cpu_percent)
+    info = data.sysinfo()
+    assert info["cpu"] == 0.0
+    assert info["ram"] == 0.0
+    assert info["disk"] == 0.0
+
+
+def test_sysinfo_disk_fallback(data, monkeypatch):
+    import psutil
+    def mock_disk_usage(path):
+        if "C:" in path:
+            raise RuntimeError("Windows drive fail")
+        class MockDisk:
+            percent = 45.6
+        return MockDisk()
+    monkeypatch.setattr(psutil, "disk_usage", mock_disk_usage)
+    info = data.sysinfo()
+    assert info["disk"] == 45.6
+

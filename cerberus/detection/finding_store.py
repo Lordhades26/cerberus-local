@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS findings (
     categories        TEXT NOT NULL,
     primary_event_id  TEXT NOT NULL,
     rule_ids          TEXT NOT NULL,
+    rule_categories   TEXT NOT NULL DEFAULT '[]',
     ai_triage         TEXT,
     evidence          TEXT NOT NULL
 );
@@ -31,11 +33,9 @@ CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);
 
 class FindingStore:
     def __init__(self, path: Path | str) -> None:
-        import sqlite3
-
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self.path, isolation_level=None)
+        self._conn = sqlite3.connect(self.path, isolation_level=None, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.execute("PRAGMA busy_timeout=5000")
@@ -43,6 +43,11 @@ class FindingStore:
 
     def init_schema(self) -> None:
         self._conn.executescript(_SCHEMA)
+        # Migración rápida por si la tabla ya existe sin la columna
+        try:
+            self._conn.execute("ALTER TABLE findings ADD COLUMN rule_categories TEXT NOT NULL DEFAULT '[]'")
+        except sqlite3.OperationalError:
+            pass # Ya existe
 
     def table_exists(self, name: str) -> bool:
         row = self._conn.execute(
@@ -58,9 +63,10 @@ class FindingStore:
             """
             INSERT INTO findings(
                 id, timestamp, host, pid, user, severity, severity_base,
-                sources, categories, primary_event_id, rule_ids, ai_triage, evidence
+                sources, categories, primary_event_id, rule_ids, rule_categories,
+                ai_triage, evidence
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 d["id"],
@@ -74,6 +80,7 @@ class FindingStore:
                 json.dumps(d["categories"]),
                 d["primary_event_id"],
                 json.dumps(d["rule_ids"]),
+                json.dumps(d.get("rule_categories", [])),
                 ai_triage,
                 json.dumps(d["evidence"]),
             ),
@@ -84,6 +91,7 @@ class FindingStore:
         d["sources"] = json.loads(d["sources"])
         d["categories"] = json.loads(d["categories"])
         d["rule_ids"] = json.loads(d["rule_ids"])
+        d["rule_categories"] = json.loads(d.get("rule_categories", "[]"))
         d["ai_triage"] = json.loads(d["ai_triage"]) if d["ai_triage"] is not None else None
         d["evidence"] = json.loads(d["evidence"])
         return d

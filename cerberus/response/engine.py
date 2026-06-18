@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Protocol
 
@@ -66,8 +67,11 @@ class ResponseEngine:
         if self._mode in ("dry_run", "monitor"):
             return False, self._mode
         if self._mode == "auto_critical":
-            if not (finding.severity == Severity.CRITICAL
-                    and (finding.categories & self._auto_critical_categories)):
+            # Permitir si coincide con categorías de eventos o categorías de reglas.
+            match_event_cats = finding.categories & self._auto_critical_categories
+            match_rule_cats = set(finding.rule_categories) & self._auto_critical_categories
+            if not (finding.severity >= Severity.HIGH
+                    and (match_event_cats or match_rule_cats)):
                 return False, "mode_gate"
         elif self._mode == "auto_all":
             if finding.severity < Severity.HIGH:
@@ -84,17 +88,17 @@ class ResponseEngine:
         for decision in decisions:
             should, reason = self._decide_execute(decision, finding)
             if should:
-                result = self._executor.run(decision.action)
+                result = await asyncio.to_thread(self._executor.run, decision.action)
             else:
-                built = self._executor.build(decision.action)
+                built = await asyncio.to_thread(self._executor.build, decision.action)
                 result = ActionResult(
                     action=decision.action, executed=False, success=False, output="",
                     command=getattr(built, "command", ""),
                     reverted_command=getattr(built, "reverted_command", None),
                     reason=reason,
                 )
-            self._store.insert(result, finding_id=finding.id,
-                               policy_id=decision.policy_id, mode=self._mode)
+            await asyncio.to_thread(self._store.insert, result, finding_id=finding.id,
+                                    policy_id=decision.policy_id, mode=self._mode)
             _log.info("response_action",
                       extra={"finding_id": finding.id, "policy": decision.policy_id,
                              "action": decision.action.type, "executed": result.executed,

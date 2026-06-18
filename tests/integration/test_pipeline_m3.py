@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -55,6 +56,11 @@ async def test_m3_detection_pipeline_enriches_and_persists(tmp_path: Path):
                             user="u", raw={}, indicators={"cmdline": "powershell -enc AAAA"}))
     await bus.drain()
     await corr.flush()
+    # Esperar a que la tarea en background se complete y llene persisted
+    for _ in range(20):
+        if len(persisted) >= 1:
+            break
+        await asyncio.sleep(0.1)
     await bus.stop()
 
     assert len(persisted) == 1

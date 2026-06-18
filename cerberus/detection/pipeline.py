@@ -32,9 +32,11 @@ class DetectionPipeline:
         if matches:
             severity_base = Severity(max(int(m.severity) for m in matches))
             rule_ids = tuple(m.rule_id for m in matches)
+            rule_categories = tuple(set(m.category for m in matches))
         else:
             severity_base = finding.severity
             rule_ids = ()
+            rule_categories = ()
 
         final_severity = severity_base
         ai_triage = None
@@ -52,5 +54,6 @@ class DetectionPipeline:
             severity=final_severity,
             severity_base=severity_base,
             rule_ids=rule_ids,
+            rule_categories=rule_categories,
             ai_triage=ai_triage,
         )

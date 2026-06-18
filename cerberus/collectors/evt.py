@@ -28,6 +28,7 @@ class EvtRecord:
 
     channel: str
     event_id: int
+    record_id: int | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -81,7 +82,9 @@ class _Win32EvtSource:
         for ev in events:
             xml = w.EvtRender(ev, w.EvtRenderEventXml)
             event_id = _parse_event_id(xml)
-            out.append(EvtRecord(channel=channel, event_id=event_id, raw={"xml": xml}))
+            record_id = _parse_record_id(xml)
+            out.append(EvtRecord(channel=channel, event_id=event_id,
+                                 record_id=record_id, raw={"xml": xml}))
         return out
 
 
@@ -93,11 +96,19 @@ def _parse_event_id(xml: str) -> int:
     return int(m.group(1)) if m else -1
 
 
+def _parse_record_id(xml: str) -> int | None:
+    """Extrae <EventRecordID>N</EventRecordID> del XML del evento."""
+    import re
+
+    m = re.search(r"<EventRecordID>(\d+)</EventRecordID>", xml)
+    return int(m.group(1)) if m else None
+
+
 class EvtCollector(Collector):
     """Lee canales de Windows Event Log y emite Events normalizados.
 
-    Degrada con gracia: si no hay source disponible (pywin32 ausente o no-Windows),
-    arranca con running=False y deja correr al resto del sistema.
+    Deduplica por canal usando el EventRecordID de Windows para evitar procesar
+    el mismo evento en múltiples ticks de polling.
     """
 
     name = "evt"
@@ -117,6 +128,8 @@ class EvtCollector(Collector):
         self._source_arg = source
         self._source: EvtSource | None = None
         self._stop = asyncio.Event()
+        # Seguimiento del último RecordID procesado por canal para deduplicación
+        self._last_ids: dict[str, int] = {}
 
     def _resolve_source(self) -> EvtSource | None:
         if self._source_arg == "unavailable":
@@ -154,6 +167,13 @@ class EvtCollector(Collector):
     async def _tick(self, bus: EventBus) -> None:
         assert self._source is not None
         for rec in self._source.poll():
+            # Deduplicación: si ya vimos este RecordID (o uno superior), saltar.
+            if rec.record_id is not None:
+                last = self._last_ids.get(rec.channel, -1)
+                if rec.record_id <= last:
+                    continue
+                self._last_ids[rec.channel] = max(last, rec.record_id)
+
             etype = _EVENT_ID_MAP.get(rec.event_id, _GENERIC_TYPE)
             ev = Event(
                 source="evt",
@@ -162,7 +182,11 @@ class EvtCollector(Collector):
                 pid=None,
                 user=rec.raw.get("TargetUserName"),
                 raw=rec.raw,
-                indicators={"channel": rec.channel, "event_id": rec.event_id},
+                indicators={
+                    "channel": rec.channel,
+                    "event_id": rec.event_id,
+                    "record_id": rec.record_id,
+                },
             )
             await bus.publish(ev)
             self._events_emitted += 1

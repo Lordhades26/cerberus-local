@@ -71,8 +71,6 @@ def cmd_status(cfg: CerberusConfig) -> int:
 
 
 def cmd_start(cfg: CerberusConfig) -> int:
-    if cfg.mode != "dry_run":
-        _log.warning("mode_forced_dry_run", extra={"requested": cfg.mode})
     return asyncio.run(_run_loop(cfg))
 
 
@@ -180,6 +178,16 @@ def _build_dashboard(cfg: CerberusConfig) -> DashboardServer | None:
     return DashboardServer(cfg)
 
 
+def _clear_databases(cfg: CerberusConfig) -> None:
+    for db_path in (cfg.paths.events_db, cfg.paths.findings_db, cfg.paths.actions_db):
+        try:
+            db_path.unlink(missing_ok=True)
+            Path(str(db_path) + "-wal").unlink(missing_ok=True)
+            Path(str(db_path) + "-shm").unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
 async def _run_loop(cfg: CerberusConfig) -> int:
     store = EventStore(cfg.paths.events_db)
     store.init_schema()
@@ -195,7 +203,7 @@ async def _run_loop(cfg: CerberusConfig) -> int:
     collected_action_reports: list[ActionReport] = []
 
     async def persist_event(ev: Event) -> None:
-        store.insert(ev)
+        await asyncio.to_thread(store.insert, ev)
         collected_events.append(ev)
 
     pipeline = _build_pipeline(cfg)
@@ -205,13 +213,15 @@ async def _run_loop(cfg: CerberusConfig) -> int:
     runtime_state = RuntimeState(cfg.paths.state_file)
     effective_mode = runtime_state.get_mode(default=cfg.mode)
     if response_engine is not None:
+        _log.info("applying_effective_mode", extra={"mode": effective_mode})
         response_engine.set_mode(effective_mode)
         if _startup_integrity_violation(cfg):
+            _log.warning("integrity_violation_forcing_dry_run")
             response_engine.set_mode("dry_run")
 
     async def on_finding(f: Finding) -> None:
         enriched = await pipeline.process(f)
-        fstore.insert(enriched)
+        await asyncio.to_thread(fstore.insert, enriched)
         collected_findings.append(enriched)
         if response_engine is not None:
             report = await response_engine.handle(enriched)
@@ -319,19 +329,24 @@ async def _report_loop(
     default_mode: str,
 ) -> None:
     while True:
-        await asyncio.sleep(interval)
-        # hot-mode: aplicar el modo persistido si cambió
-        persisted = runtime_state.get_mode(default=default_mode)
-        if response_engine is not None and persisted != response_engine.mode:
-            response_engine.set_mode(persisted)
-        ev_snapshot = list(events)
-        fn_snapshot = list(findings)
-        ar_snapshot = list(action_reports)
-        events.clear()
-        findings.clear()
-        action_reports.clear()
-        writer.write(ev_snapshot, when=datetime.now(UTC), findings=fn_snapshot,
-                     action_reports=ar_snapshot)
+        try:
+            await asyncio.sleep(interval)
+            # hot-mode: aplicar el modo persistido si cambió
+            persisted = runtime_state.get_mode(default=default_mode)
+            if response_engine is not None and persisted != response_engine.mode:
+                response_engine.set_mode(persisted)
+            
+            if events or findings or action_reports:
+                ev_snapshot = list(events)
+                fn_snapshot = list(findings)
+                ar_snapshot = list(action_reports)
+                events.clear()
+                findings.clear()
+                action_reports.clear()
+                writer.write(ev_snapshot, when=datetime.now(UTC), findings=fn_snapshot,
+                             action_reports=ar_snapshot)
+        except Exception as exc:
+            _log.error("report_loop_error", extra={"error": str(exc)})
 
 
 def cmd_stop(cfg: CerberusConfig) -> int:

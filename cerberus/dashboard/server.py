@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
+import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -33,11 +37,26 @@ _STATIC_FILES = {
     "/index.html": ("index.html", "text/html; charset=utf-8"),
     "/styles.css": ("styles.css", "text/css; charset=utf-8"),
     "/app.js": ("app.js", "application/javascript; charset=utf-8"),
+    "/logo.png": ("logo.png", "image/png"),
 }
 
 
-def build_api_response(data: DashboardData, path: str, limit: int) -> dict[str, Any] | None:
+def build_api_response(
+    data: DashboardData, path: str, limit: int, mode_value: str | None = None
+) -> dict[str, Any] | None:
     """Devuelve el dict JSON para una ruta /api/* o None si no existe (puro, testeable)."""
+    if path == "/api/mode" and mode_value:
+        ok = data.set_mode(mode_value)
+        return {"status": "success" if ok else "error", "mode": mode_value}
+    if path == "/api/shutdown":
+        _log.warning("dashboard_shutdown_requested")
+
+        def delayed_shutdown() -> None:
+            time.sleep(1)
+            os.kill(os.getpid(), signal.SIGINT)
+
+        threading.Thread(target=delayed_shutdown).start()
+        return {"status": "shutdown_initiated"}
     if path == "/api/status":
         return data.status()
     if path == "/api/summary":
@@ -48,8 +67,12 @@ def build_api_response(data: DashboardData, path: str, limit: int) -> dict[str, 
         return data.events()
     if path == "/api/actions":
         return {"actions": data.actions(limit=limit)}
+    if path == "/api/processes":
+        return {"processes": data.processes(limit=limit)}
     if path == "/api/metrics":
         return data.metrics()
+    if path == "/api/sysinfo":
+        return data.sysinfo()
     return None
 
 
@@ -78,12 +101,15 @@ class _Handler(BaseHTTPRequestHandler):
         raw_path = self.path.split("?", 1)[0]
         query = self.path.split("?", 1)[1] if "?" in self.path else ""
         limit = 10
+        mode_value: str | None = None
         for part in query.split("&"):
             if part.startswith("limit="):
                 try:
                     limit = max(1, min(500, int(part[6:])))
                 except ValueError:
                     pass
+            if part.startswith("value="):
+                mode_value = part[6:]
 
         if raw_path in _STATIC_FILES:
             fname, ctype = _STATIC_FILES[raw_path]
@@ -96,7 +122,7 @@ class _Handler(BaseHTTPRequestHandler):
 
         if raw_path.startswith("/api/"):
             try:
-                payload = build_api_response(self.data, raw_path, limit)
+                payload = build_api_response(self.data, raw_path, limit, mode_value)
             except Exception as exc:  # un error de lectura no debe tumbar el server
                 _log.error("dashboard_api_error", extra={"path": raw_path, "error": str(exc)})
                 self._send_json(500, {"error": "internal error"})
@@ -109,8 +135,23 @@ class _Handler(BaseHTTPRequestHandler):
 
         self._send_json(404, {"error": "not found"})
 
-    def do_POST(self) -> None:  # dashboard es read-only
-        self._send_json(405, {"error": "method not allowed (read-only dashboard)"})
+    def do_POST(self) -> None:
+        raw_path = self.path.split("?", 1)[0]
+        if raw_path == "/api/generate_report":
+            try:
+                filepath = self.data.generate_docx_report()
+                if filepath:
+                    self._send_json(200, {"status": "success", "file": filepath})
+                else:
+                    msg = "python-docx library missing or generation failed"
+                    self._send_json(500, {"error": msg})
+            except Exception as exc:
+                _log.error("dashboard_generate_report_error", extra={"error": str(exc)})
+                self._send_json(500, {"error": str(exc)})
+            return
+
+        msg = "method not allowed (read-only dashboard, except for specific actions)"
+        self._send_json(405, {"error": msg})
 
 
 class _DashboardHTTPServer(ThreadingHTTPServer):

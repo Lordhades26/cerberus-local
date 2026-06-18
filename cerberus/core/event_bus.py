@@ -79,9 +79,14 @@ class EventBus:
         for sub in list(self._subs):
             if sub.source_filter and sub.source_filter != event.source:
                 continue
-            try:
-                result = sub.handler(event)
-                if inspect.isawaitable(result):
-                    await result
-            except Exception as exc:
-                _log.error("handler_error", extra={"error": str(exc), "event_id": event.id})
+            
+            # Lanzamos cada manejador en su propia tarea para no bloquear el bus
+            asyncio.create_task(self._run_handler(sub.handler, event))
+
+    async def _run_handler(self, handler: Handler, event: Event) -> None:
+        try:
+            result = handler(event)
+            if inspect.isawaitable(result):
+                await result
+        except Exception as exc:
+            _log.error("handler_error", extra={"error": str(exc), "event_id": event.id})

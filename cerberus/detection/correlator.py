@@ -102,6 +102,13 @@ class Correlator:
                 extra={"finding_id": finding.id, "pid": pid,
                        "sources": sorted(sources)},
             )
+            # Disparamos el procesamiento del hallazgo en una tarea de fondo
+            asyncio.create_task(self._handle_finding(finding))
+
+    async def _handle_finding(self, finding: Finding) -> None:
+        try:
             result = self._on_finding(finding)
             if result is not None:
                 await result
+        except Exception as exc:
+            _log.error("correlator_on_finding_error", extra={"error": str(exc), "finding_id": finding.id})

@@ -1,168 +1,318 @@
-<!doctype html>
-<html lang="es" data-theme="dark">
+<!DOCTYPE html>
+<html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CERBERUS — Panel de Operación</title>
-  <link rel="stylesheet" href="styles.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CERBERUS LOCAL | Tactical Cyber EDR</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app">
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-      <div class="brand">
-        <span class="brand-logo" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-        </span>
-        <span class="brand-name">CERBERUS</span>
-        <button class="brand-collapse" id="collapseBtn" title="Colapsar" aria-label="Colapsar">‹</button>
-      </div>
 
-      <nav class="nav">
-        <div class="nav-group">
-          <p class="nav-label">MONITOREO</p>
-          <a class="nav-item active" data-target="kpis"><i class="dot"></i>Dashboard</a>
-          <a class="nav-item" data-target="panel-findings"><i class="dot"></i>Findings</a>
-          <a class="nav-item" data-target="panel-events"><i class="dot"></i>Eventos</a>
-          <a class="nav-item" data-target="panel-telemetry"><i class="dot"></i>Collectors</a>
-        </div>
-        <div class="nav-group">
-          <p class="nav-label">DETECCIÓN</p>
-          <a class="nav-item" data-target="panel-detection"><i class="dot"></i>Reglas</a>
-          <a class="nav-item" data-target="panel-detection"><i class="dot"></i>Triage IA</a>
-        </div>
-        <div class="nav-group">
-          <p class="nav-label">RESPUESTA</p>
-          <a class="nav-item" data-target="panel-response"><i class="dot"></i>Acciones</a>
-          <a class="nav-item" data-target="kpi-mode"><i class="dot"></i>Modo</a>
-        </div>
-        <div class="nav-group">
-          <p class="nav-label">SISTEMA</p>
-          <a class="nav-item" data-target="kpi-agent"><i class="dot"></i>Integridad</a>
-          <a class="nav-item" data-target="kpi-agent"><i class="dot"></i>Killswitch</a>
-        </div>
-        <div class="nav-group">
-          <p class="nav-label">SOPORTE</p>
-          <a class="nav-item" href="https://github.com/Lordhades26/cerberus-local" target="_blank" rel="noopener"><i class="dot"></i>Docs</a>
-        </div>
-      </nav>
-    </aside>
-
-    <!-- Main -->
-    <div class="main">
-      <header class="topbar">
-        <div class="conn" id="conn">
-          <span class="conn-dot"></span><span id="connText">conectando…</span>
-        </div>
-        <div class="topbar-actions">
-          <button class="icon-btn" id="themeBtn" title="Tema" aria-label="Tema">🌙</button>
-          <span class="chip">ES</span>
-          <button class="icon-btn" title="Notificaciones" aria-label="Notificaciones">🔔</button>
-          <span class="avatar">CB</span>
-        </div>
-      </header>
-
-      <main class="content">
-        <div class="page-head">
-          <span class="page-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              <path d="M9 12l2 2 4-4"/>
-            </svg>
-          </span>
-          <div>
-            <h1>Panel de Operación</h1>
-            <p class="sub">Monitorea telemetría, detección y respuesta del agente en tiempo real</p>
-          </div>
-          <span class="ver" id="version">v—</span>
-        </div>
-
-        <!-- KPI row -->
-        <section class="kpis" id="kpis">
-          <article class="kpi kpi-red">
-            <div class="kpi-top"><span class="kpi-ico">🛡️</span><span class="badge badge-red" id="kpiFindingsBadge">—</span></div>
-            <p class="kpi-title">Findings activos</p>
-            <p class="kpi-value" id="kpiFindings">—</p>
-            <p class="kpi-foot">Hallazgos correlacionados que requieren atención</p>
-          </article>
-          <article class="kpi kpi-green" id="kpi-agent">
-            <div class="kpi-top"><span class="kpi-ico">🟢</span><span class="badge badge-green" id="kpiAgentBadge">—</span></div>
-            <p class="kpi-title">Salud del agente</p>
-            <p class="kpi-value" id="kpiAgent">—</p>
-            <p class="kpi-foot" id="kpiAgentFoot">Collectors e integridad</p>
-          </article>
-          <article class="kpi kpi-amber">
-            <div class="kpi-top"><span class="kpi-ico">⚙️</span><span class="badge badge-amber" id="kpiActionsBadge">—</span></div>
-            <p class="kpi-title">Acciones</p>
-            <p class="kpi-value" id="kpiActions">—</p>
-            <p class="kpi-foot">Ejecutadas vs. registradas</p>
-          </article>
-          <article class="kpi kpi-gold" id="kpi-mode">
-            <div class="kpi-top"><span class="kpi-ico">🎚️</span><span class="badge badge-gold" id="kpiModeBadge">—</span></div>
-            <p class="kpi-title">Modo de operación</p>
-            <p class="kpi-value" id="kpiMode">—</p>
-            <p class="kpi-foot" id="kpiModeFoot">Killswitch / política de respuesta</p>
-          </article>
-        </section>
-
-        <!-- 3 panels -->
-        <section class="panels">
-          <article class="panel" id="panel-detection">
-            <div class="panel-head"><span class="panel-ico">🧠</span><h2>Detección</h2></div>
-            <div class="ministats">
-              <div class="ministat"><p class="ms-label">Findings con regla</p><p class="ms-value" id="dRuleFindings">—</p></div>
-              <div class="ministat"><p class="ms-label">Reglas distintas</p><p class="ms-value" id="dRules">—</p></div>
+    <!-- Cabecera Principal Táctica -->
+    <header class="header">
+        <div class="logo-section">
+            <img src="logo.png" class="company-logo" alt="Hades Sentinel">
+            <div>
+                <h1>CERBERUS <span>LOCAL</span></h1>
+                <div class="subtitle">Ecosistema Defensivo EDR & Inteligencia Artificial Local</div>
             </div>
-            <p class="list-label">Findings recientes</p>
-            <ul class="list" id="findingsList"></ul>
-          </article>
-
-          <article class="panel" id="panel-telemetry">
-            <div class="panel-head"><span class="panel-ico">📡</span><h2>Telemetría</h2></div>
-            <div class="ministats">
-              <div class="ministat"><p class="ms-label">Collectors activos</p><p class="ms-value" id="tActive">—</p></div>
-              <div class="ministat"><p class="ms-label">Eventos totales</p><p class="ms-value" id="tEvents">—</p></div>
+        </div>
+        <div class="header-controls">
+            <button class="btn" style="padding: 6px 14px; background: rgba(0, 255, 102, 0.08); border: 1px solid var(--border-color); font-family: var(--font-mono); font-size: 0.78rem; width: auto; color: var(--neon-accent);" onclick="window.open('https://github.com/Lordhades26/cerberus-local', '_blank')">
+                📖 Repositorio
+            </button>
+            <div class="system-status">
+                <span style="color: var(--text-secondary);">EDR STATUS:</span>
+                <div class="status-badge">
+                    <div id="statusDot" class="status-dot running"></div>
+                    <span id="statusText">ACTIVE</span>
+                </div>
             </div>
-            <p class="list-label">Eventos por fuente</p>
-            <ul class="list" id="collectorsList"></ul>
-          </article>
+            <button id="btnShutdown" class="btn" style="padding: 6px 14px; background: rgba(255, 0, 85, 0.1); border: 1px solid rgba(255, 0, 85, 0.3); font-family: var(--font-mono); font-size: 0.78rem; width: auto; color: var(--neon-alert);" title="Apagar el Servidor del Dashboard">
+                ⚡ APAGAR DASHBOARD
+            </button>
+        </div>
+    </header>
 
-          <article class="panel" id="panel-response">
-            <div class="panel-head"><span class="panel-ico">⚡</span><h2>Respuesta</h2></div>
-            <div class="ministats">
-              <div class="ministat"><p class="ms-label">Acciones totales</p><p class="ms-value" id="rTotal">—</p></div>
-              <div class="ministat"><p class="ms-label">Auto-ejecutadas</p><p class="ms-value" id="rExec">—</p></div>
-            </div>
-            <p class="list-label">Acciones recientes</p>
-            <ul class="list" id="actionsList"></ul>
-          </article>
-        </section>
+    <!-- Fila Superior: Métricas / Estadísticas EDR -->
+    <section class="stats-grid">
+        <div class="stat-card">
+            <div class="icon-bg">⬡</div>
+            <div class="stat-label">Eventos Monitoreados</div>
+            <div id="stat-events" class="stat-value success">0</div>
+            <div class="stat-subtext">Telemetría de Host en Vivo</div>
+        </div>
+        <div class="stat-card">
+            <div class="icon-bg">⚠</div>
+            <div class="stat-label">Amenazas / Hallazgos</div>
+            <div id="stat-findings" class="stat-value alert">0</div>
+            <div id="stat-findings-label" class="stat-subtext">Aguardando análisis</div>
+        </div>
+        <div class="stat-card">
+            <div class="icon-bg">🧠</div>
+            <div class="stat-label">Integridad de Firmas</div>
+            <div id="stat-integrity" class="stat-value" style="color: var(--neon-info); text-shadow: 0 0 10px rgba(0,245,255,0.2);">100%</div>
+            <div class="stat-subtext">Arbol de archivos firmado</div>
+        </div>
+        <div class="stat-card">
+            <div class="icon-bg">⚙</div>
+            <div class="stat-label">Acciones Ejecutadas</div>
+            <div id="stat-actions" class="stat-value" style="color: var(--neon-warning); text-shadow: 0 0 10px rgba(255,159,0,0.2);">0</div>
+            <div id="stat-actions-sub" class="stat-subtext">0 bloqueos automáticos</div>
+        </div>
+    </section>
 
-        <!-- bottom row -->
-        <section class="bottom">
-          <article class="panel chart-panel" id="panel-events">
-            <div class="panel-head">
-              <span class="panel-ico">📈</span><h2>Tendencia de eventos</h2>
-              <span class="legend"><i class="lg lg-ev"></i>Eventos</span>
+    <!-- Contenido Principal en Grid -->
+    <main class="grid-container">
+        
+        <!-- Columna Izquierda: Configuración + Timeline + Procesos -->
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            
+            <!-- Panel de Control y Modos -->
+            <section class="panel">
+                <h2 class="panel-title">⬡ Configuración Operativa EDR</h2>
+                <div class="form-group">
+                    <label for="agentModeSelect">Modo de Respuesta</label>
+                    <select id="agentModeSelect" class="form-control">
+                        <option value="dry_run">Dry Run (Solo alertas y auditoría pasiva)</option>
+                        <option value="auto_critical">Auto Critical (Acción automática ante amenazas críticas)</option>
+                        <option value="passive">Passive (Solo recolección de eventos)</option>
+                    </select>
+                    <small style="font-size:0.72rem; color: var(--text-secondary); margin-top:6px; display:block;">
+                        * El cambio de modo se aplica dinámicamente y en caliente sobre el motor de políticas.
+                    </small>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 0.5rem;">
+                    <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(0,255,102,0.05); font-size: 0.78rem;">
+                        <span style="color: var(--text-secondary);">Response Engine:</span>
+                        <strong id="cfg-response-status" style="color: var(--neon-accent); float: right;">ACTIVO</strong>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(0,255,102,0.05); font-size: 0.78rem;">
+                        <span style="color: var(--text-secondary);">Killswitch:</span>
+                        <strong id="cfg-killswitch-status" style="color: var(--text-secondary); float: right;">INACTIVO</strong>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Flujo Visual EDR -->
+            <section class="panel">
+                <h2 class="panel-title">⬡ Pipeline de Detección y Respuesta</h2>
+                <div class="timeline">
+                    <div class="timeline-item active" id="step-0">
+                        <div class="timeline-dot active"></div>
+                        <div class="timeline-content">
+                            <h3>0. Recolección de Telemetría</h3>
+                            <p id="collectors-info">Buscando colectores activos...</p>
+                        </div>
+                    </div>
+                    <div class="timeline-item" id="step-1">
+                        <div class="timeline-dot pending"></div>
+                        <div class="timeline-content">
+                            <h3>1. Correlación de Eventos</h3>
+                            <p>Procesando eventos cruzados en EventBus</p>
+                        </div>
+                    </div>
+                    <div class="timeline-item" id="step-2">
+                        <div class="timeline-dot pending"></div>
+                        <div class="timeline-content">
+                            <h3>2. Análisis de Firmas y Reglas</h3>
+                            <p>Evaluación estática de patrones maliciosos en RuleEngine</p>
+                        </div>
+                    </div>
+                    <div class="timeline-item" id="step-3">
+                        <div class="timeline-dot pending"></div>
+                        <div class="timeline-content">
+                            <h3>3. Triage Cognitivo (Ollama)</h3>
+                            <p>Análisis heurístico de IA local (llama3-EDR)</p>
+                        </div>
+                    </div>
+                    <div class="timeline-item" id="step-4">
+                        <div class="timeline-dot pending"></div>
+                        <div class="timeline-content">
+                            <h3>4. Evaluación de Políticas</h3>
+                            <p>Asociación de hallazgos con reglas de respuesta</p>
+                        </div>
+                    </div>
+                    <div class="timeline-item" id="step-5">
+                        <div class="timeline-dot pending"></div>
+                        <div class="timeline-content">
+                            <h3>5. Mitigación Activa</h3>
+                            <p>Aislamiento de red, kill PID o cuarentena de ficheros</p>
+                        </div>
+                    </div>
+                    <div class="timeline-item" id="step-6">
+                        <div class="timeline-dot pending"></div>
+                        <div class="timeline-content">
+                            <h3>6. Consolidación y Reportes</h3>
+                            <p>Exportación de hallazgos forenses a documentos .docx</p>
+                            <button id="btnGenerateReport" class="btn" style="margin-top: 8px; padding: 4px 10px; background: rgba(0, 245, 255, 0.1); border: 1px solid rgba(0, 245, 255, 0.3); font-family: var(--font-mono); font-size: 0.72rem; color: var(--neon-info); cursor: pointer;">📄 GENERAR REPORTE .DOCX</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Procesos Top CPU -->
+            <section class="panel">
+                <h2 class="panel-title">⬡ Monitoreo de Procesos (Top CPU)</h2>
+                <div class="proc-list" id="proc-container">
+                    <div style="color: var(--text-secondary); text-align: center; padding: 20px;">Cargando procesos...</div>
+                </div>
+            </section>
+
+        </div>
+
+        <!-- Columna Derecha: Consola + Recursos + Detalles -->
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            
+            <!-- Terminal de Logs / Telemetría -->
+            <section class="panel" style="flex-grow: 1;">
+                <div class="console-wrapper">
+                    <div class="console-header">
+                        <span>terminal@cerberus-edr:~$ logs --tail</span>
+                        <span style="color: var(--neon-accent);">[CONEXIÓN ESTABLE]</span>
+                    </div>
+                    <div id="consoleLog" class="console">Inicializando terminal de monitoreo Cerberus...
+Esperando flujo de eventos...</div>
+                </div>
+            </section>
+
+            <!-- Detalles del Activo / Host -->
+            <section class="panel">
+                <h2 class="panel-title">
+                    <span>⬡ Detalles del Activo</span>
+                    <span id="active-host-ip" style="font-family: var(--font-mono); font-size: 0.82rem; color: var(--neon-accent);">TESTHOST</span>
+                </h2>
+                <div class="host-tabs">
+                    <button class="host-tab active" data-tab="general">General</button>
+                    <button class="host-tab" data-tab="collectors">Colectores</button>
+                    <button class="host-tab" data-tab="actions">Políticas y Respuestas</button>
+                </div>
+                <div class="host-details-body" id="details-content">
+                    <div class="detail-row"><span class="label">Nombre del Host</span><span class="value" id="det-host">TESTHOST</span></div>
+                    <div class="detail-row"><span class="label">Versión EDR</span><span class="value" id="det-version">0.7.0</span></div>
+                    <div class="detail-row"><span class="label">Modo Operativo</span><span class="value" id="det-mode">dry_run</span></div>
+                    <div class="detail-row"><span class="label">Uptime del Servidor</span><span class="value" id="det-uptime">00:00:00</span></div>
+                </div>
+            </section>
+
+            <!-- Recursos de Hardware Local -->
+            <section class="mini-panel" id="resourcePanel">
+                <div class="lsw-header">
+                    <span class="lsw-title">💻 Recursos de Hardware Local</span>
+                </div>
+                <div class="ai-metrics">
+                    <div class="ai-metric-row">
+                        <div class="ai-metric-label"><span>Procesador (CPU)</span><span class="ai-metric-value" id="resCpuVal">0%</span></div>
+                        <div class="ai-bar-track"><div class="ai-bar-fill green" id="resCpuBar" style="width: 0%;"></div></div>
+                    </div>
+                    <div class="ai-metric-row">
+                        <div class="ai-metric-label"><span>Memoria RAM</span><span class="ai-metric-value" id="resRamVal">0%</span></div>
+                        <div class="ai-bar-track"><div class="ai-bar-fill cyan" id="resRamBar" style="width: 0%;"></div></div>
+                    </div>
+                    <div class="ai-metric-row">
+                        <div class="ai-metric-label"><span>Actividad de Disco</span><span class="ai-metric-value" id="resDiskVal">0%</span></div>
+                        <div class="ai-bar-track"><div class="ai-bar-fill amber" id="resDiskBar" style="width: 0%;"></div></div>
+                    </div>
+                </div>
+                <div class="ai-status-line">
+                    <div style="display: flex; align-items: center; gap: 15px; width: 100%; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span class="ai-status-dot active"></span>
+                            <span>Temp Estimada: <strong id="resTempVal" style="color: var(--neon-accent);">-- °C</strong></span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span class="ai-status-dot active" style="background: var(--neon-warning); box-shadow: 0 0 8px var(--neon-warning);"></span>
+                            <span>Ventilador: <strong id="resFanVal" style="color: var(--neon-warning);">-- RPM</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Fila de Paneles Inferiores: Flujo de Eventos y Ollama IA -->
+            <div class="bottom-row">
+                
+                <!-- Flujo de Eventos -->
+                <div class="mini-panel">
+                    <div class="lsw-header">
+                        <span class="lsw-title">⬡ Eventos Recientes</span>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span class="ai-status-dot active" style="background-color: var(--neon-accent);"></span>
+                        </div>
+                    </div>
+                    <div class="lsw-body" id="event-feed-body">
+                        <div style="color: var(--text-secondary); text-align: center; padding: 20px; font-size: 0.74rem;">Monitoreando red y procesos...</div>
+                    </div>
+                    <div class="lsw-footer">
+                        <span>Fases de Entrada</span>
+                        <span id="event-feed-count">0 eventos</span>
+                    </div>
+                </div>
+
+                <!-- Estado Ollama IA -->
+                <div class="mini-panel">
+                    <div class="lsw-header">
+                        <span class="lsw-title">🧠 Ollama IA Analyst</span>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span class="ai-status-dot" id="aiStatusDot"></span>
+                        </div>
+                    </div>
+                    <div class="ai-metrics">
+                        <div class="ai-metric-row">
+                            <div class="ai-metric-label"><span>Carga de Inferencia</span><span class="ai-metric-value" id="aiModelVal">0%</span></div>
+                            <div class="ai-bar-track"><div class="ai-bar-fill green" id="aiModelBar"></div></div>
+                        </div>
+                        <div class="ai-metric-row">
+                            <div class="ai-metric-label"><span>Tokens / Segundo</span><span class="ai-metric-value" id="aiTokenVal">0 t/s</span></div>
+                            <div class="ai-bar-track"><div class="ai-bar-fill cyan" id="aiTokenBar"></div></div>
+                        </div>
+                        <div class="ai-metric-row">
+                            <div class="ai-metric-label"><span>Memoria VRAM</span><span class="ai-metric-value" id="aiMemVal">— MB</span></div>
+                            <div class="ai-bar-track"><div class="ai-bar-fill purple" id="aiMemBar"></div></div>
+                        </div>
+                    </div>
+                    <div class="ai-status-line">
+                        <span id="aiStatusText">EN ESPERA</span>
+                    </div>
+                </div>
+
             </div>
-            <div id="eventsChart" class="chart"></div>
-          </article>
-          <article class="panel">
-            <div class="panel-head"><span class="panel-ico">📊</span><h2>Métricas</h2></div>
-            <div class="metric-row"><span class="m-ico">🧾</span><div><p class="m-value" id="mFindings">—</p><p class="m-label">Findings totales</p></div></div>
-            <div class="metric-row"><span class="m-ico">📐</span><div><p class="m-value" id="mRules">—</p><p class="m-label">Reglas que dispararon</p></div></div>
-            <div class="metric-row"><span class="m-ico">🤖</span><div><p class="m-value" id="mAi">—</p><p class="m-label">Findings con triage IA</p></div></div>
-            <div class="metric-row"><span class="m-ico">⚡</span><div><p class="m-value" id="mAuto">—</p><p class="m-label">% acciones ejecutadas</p></div></div>
-          </article>
-        </section>
-        <p class="updated" id="updated"></p>
-      </main>
+
+        </div>
+
+    </main>
+
+    <!-- Fila Inferior Completa: Tabla de Hallazgos Recientes -->
+    <section class="panel" style="margin-top: 1.5rem;">
+        <h2 class="panel-title">⚠️ Amenazas y Hallazgos Recientes</h2>
+        <div class="table-wrapper">
+            <table class="t-table">
+                <thead>
+                    <tr>
+                        <th style="width: 120px;">Severidad</th>
+                        <th style="width: 150px;">Categoría</th>
+                        <th>Regla / Threat ID</th>
+                        <th style="width: 120px;">PID</th>
+                        <th style="width: 150px;">IA Analyst</th>
+                        <th style="width: 100px;">Mitigación</th>
+                    </tr>
+                </thead>
+                <tbody id="findings-table-body">
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 30px;">
+                            No se han detectado hallazgos de seguridad en el ciclo actual.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Pie de página -->
+    <div class="footer-text">
+        CERBERUS LOCAL CYBER COMMAND SECURITY CENTER &copy; 2026 HADES TACTICAL DEFENSE SYSTEM
     </div>
-  </div>
-  <script src="app.js" type="module"></script>
+
+    <!-- Script de control -->
+    <script src="app.js"></script>
 </body>
 </html>

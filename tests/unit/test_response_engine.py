@@ -10,11 +10,11 @@ from cerberus.response.engine import ResponseEngine
 from cerberus.response.rate_limiter import RateLimiter
 
 
-def _finding(severity=Severity.CRITICAL, categories=("mass_rename",), pid=4892):
+def _finding(severity=Severity.CRITICAL, categories=("mass_rename",), pid=4892, rule_cats=()):
     evs = [Event(source="fs", type=c, host="H", pid=pid, user="u", raw={}, indicators={})
            for c in categories]
     f = Finding.from_cluster(host="H", pid=pid, user="u", evidence=evs)
-    return dataclasses.replace(f, severity=severity, severity_base=severity)
+    return dataclasses.replace(f, severity=severity, severity_base=severity, rule_categories=rule_cats)
 
 
 class _FakePolicy:
@@ -143,3 +143,13 @@ async def test_only_policy_decides_not_ai(tmp_path):
     f = dataclasses.replace(f, ai_triage={"suggested_actions": ["isolate_host", "disable_user"]})
     await eng.handle(f)
     assert [a.type for a in ex.run_calls] == ["kill_pid"]
+
+
+@pytest.mark.asyncio
+async def test_auto_critical_matches_on_rule_category(tmp_path):
+    ex = _FakeExecutor()
+    eng, _ = _engine(tmp_path, "auto_critical", [_dec()], executor=ex)
+    # new_process no está en auto_critical_categories, pero ransomware sí
+    f = _finding(severity=Severity.HIGH, categories=("new_process",), rule_cats=("ransomware",))
+    await eng.handle(f)
+    assert len(ex.run_calls) == 1

@@ -48,6 +48,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_version()
     cfg = resolve_config(args.config)
     if args.command == "start":
+        if args.dry_run:
+            cfg = cfg._replace(mode="dry_run")
         return cmd_start(cfg)
     if args.command == "status":
         return cmd_status(cfg)
