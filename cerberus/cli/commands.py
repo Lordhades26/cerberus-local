@@ -296,6 +296,7 @@ async def _run_loop(cfg: CerberusConfig) -> int:
         # drenar eventos pendientes y promover findings finales antes de cerrar
         await bus.drain()
         await correlator.flush()
+        await correlator.join()   # esperar el manejo de los findings finales
         for t in (*collector_tasks, correlator_task, reporter_task):
             t.cancel()
         for t in (*collector_tasks, correlator_task, reporter_task):

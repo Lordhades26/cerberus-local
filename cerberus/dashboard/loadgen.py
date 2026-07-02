@@ -103,6 +103,7 @@ async def run_load(work_dir: Path, n_pids: int, mode: str = "dry_run") -> LoadRe
             total_events += 1
     await bus.drain()
     await correlator.flush()
+    await correlator.join()   # esperar el manejo de todos los hallazgos promovidos
     await bus.stop()
     elapsed = time.perf_counter() - start
 

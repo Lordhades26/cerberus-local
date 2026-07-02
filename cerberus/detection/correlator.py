@@ -49,6 +49,10 @@ class Correlator:
         self._buffer: list[_TimedEvent] = []
         self._promoted: set[_ClusterKey] = set()
         self._stop = asyncio.Event()
+        # Tareas de manejo de hallazgos en vuelo. Se trackean para poder
+        # esperarlas (join) antes de leer resultados o cerrar: sin esto las
+        # tareas fire-and-forget podían perderse en un flush/cierre.
+        self._pending: set[asyncio.Task] = set()
 
     def attach(self, bus: EventBus) -> None:
         bus.subscribe(self._on_event)
@@ -70,6 +74,17 @@ class Correlator:
 
     async def stop(self) -> None:
         self._stop.set()
+
+    async def join(self) -> None:
+        """Espera a que terminen las tareas de manejo de hallazgos en vuelo.
+
+        Debe llamarse tras un flush explícito (tests, cierre) antes de leer
+        resultados o cerrar recursos, para no descartar hallazgos ni acciones.
+        """
+        while self._pending:
+            batch = tuple(self._pending)
+            self._pending.difference_update(batch)
+            await asyncio.gather(*batch, return_exceptions=True)
 
     def _evict(self, now: float) -> None:
         cutoff = now - self._window
@@ -102,8 +117,11 @@ class Correlator:
                 extra={"finding_id": finding.id, "pid": pid,
                        "sources": sorted(sources)},
             )
-            # Disparamos el procesamiento del hallazgo en una tarea de fondo
-            asyncio.create_task(self._handle_finding(finding))
+            # Disparamos el procesamiento del hallazgo en una tarea de fondo,
+            # trackeada para poder esperarla en join().
+            task = asyncio.create_task(self._handle_finding(finding))
+            self._pending.add(task)
+            task.add_done_callback(self._pending.discard)
 
     async def _handle_finding(self, finding: Finding) -> None:
         try:
