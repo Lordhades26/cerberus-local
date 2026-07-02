@@ -5,7 +5,7 @@ import pytest
 
 from cerberus.ai.ollama_client import OllamaClient, OllamaError
 
-_MODEL = "qwen2.5-coder:14b"
+_MODEL = "HADES-DOLPHIN-EDR:latest"
 
 
 def _ollama_up() -> bool:

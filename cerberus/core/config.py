@@ -195,7 +195,7 @@ def _detection(raw: dict[str, Any]) -> DetectionConfig:
         ),
         ai_analyst=AIAnalystConfig(
             enabled=bool(ai_raw.get("enabled", True)),
-            model=str(ai_raw.get("model", "qwen2.5-coder:14b")),
+            model=str(ai_raw.get("model", "HADES-DOLPHIN-EDR:latest")),
             base_url=ai_raw.get("base_url"),
             timeout_seconds=float(ai_raw.get("timeout_seconds", 20.0)),
             max_severity_delta=int(ai_raw.get("max_severity_delta", 1)),

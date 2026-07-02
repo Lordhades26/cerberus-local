@@ -69,7 +69,7 @@ detection:
     rules_dir: "rules"
   ai_analyst:
     enabled: true
-    model: "qwen2.5-coder:14b"
+    model: "HADES-DOLPHIN-EDR:latest"   # variante defensiva de triage JSON (SYSTEM magro)
     base_url: null                  # null = autodetect (env -> 127.0.0.1:11434 -> host.docker.internal)
     timeout_seconds: 20.0
     max_severity_delta: 1
